@@ -16,18 +16,17 @@ export async function GET(request: Request) {
       if (user) {
         const { data: profile } = await supabase
           .from('profiles')
-          .select('role, is_admin')
+          .select('role')
           .eq('id', user.id)
           .single()
 
         if (profile) {
-          if (profile.is_admin) {
-            return NextResponse.redirect(`${origin}/admin`)
+          const redirectMap: Record<string, string> = {
+            admin: '/admin',
+            sales: '/sales',
+            investor: '/investor',
           }
-          if (profile.role === 'sales') {
-            return NextResponse.redirect(`${origin}/sales`)
-          }
-          return NextResponse.redirect(`${origin}/investor`)
+          return NextResponse.redirect(`${origin}${redirectMap[profile.role] ?? '/investor'}`)
         }
       }
 
