@@ -141,7 +141,7 @@ export default function LoginPage() {
         </form>
 
         <p className="text-center text-[var(--color-text-muted)] text-xs mt-6">
-          © 2025 OWNIA LAND. All rights reserved.
+          © {new Date().getFullYear()} OWNIA LAND. All rights reserved.
         </p>
       </div>
     </div>
