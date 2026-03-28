@@ -52,7 +52,9 @@ export default function LoginPage() {
       investor: '/investor',
     }
 
-    window.location.href = redirectMap[profile.role] ?? '/investor'
+    const dest = redirectMap[profile.role] ?? '/investor'
+    alert(`DB role: "${profile.role}" → 이동: ${dest}`)
+    window.location.href = dest
   }
 
   return (
