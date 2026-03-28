@@ -15,6 +15,8 @@ interface EditForm {
   bank_name: string
   account_number: string
   account_holder: string
+  start_date: string
+  end_date: string
 }
 
 export default function AdminInvestmentsPage() {
@@ -25,6 +27,7 @@ export default function AdminInvestmentsPage() {
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editForm, setEditForm] = useState<EditForm>({
     full_name: '', phone: '', bank_name: '', account_number: '', account_holder: '',
+    start_date: '', end_date: '',
   })
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
@@ -102,6 +105,8 @@ export default function AdminInvestmentsPage() {
       bank_name: inv.bank_name,
       account_number: inv.account_number,
       account_holder: inv.account_holder,
+      start_date: inv.start_date ?? '',
+      end_date: inv.end_date ?? '',
     })
     setError('')
   }
@@ -135,6 +140,8 @@ export default function AdminInvestmentsPage() {
           bank_name: editForm.bank_name,
           account_number: editForm.account_number,
           account_holder: editForm.account_holder,
+          start_date: editForm.start_date || null,
+          end_date: editForm.end_date || null,
         })
         .eq('id', inv.id)
 
@@ -253,6 +260,24 @@ export default function AdminInvestmentsPage() {
                           <input
                             value={editForm.account_holder}
                             onChange={(e) => setEditForm({ ...editForm, account_holder: e.target.value })}
+                            className="w-full px-3 py-2 rounded-lg bg-[var(--color-bg-hover)] border border-[var(--color-border)] text-white text-sm focus:outline-none focus:border-[var(--color-accent)]"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs text-[var(--color-text-muted)] mb-1">시작일</label>
+                          <input
+                            type="date"
+                            value={editForm.start_date}
+                            onChange={(e) => setEditForm({ ...editForm, start_date: e.target.value })}
+                            className="w-full px-3 py-2 rounded-lg bg-[var(--color-bg-hover)] border border-[var(--color-border)] text-white text-sm focus:outline-none focus:border-[var(--color-accent)]"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs text-[var(--color-text-muted)] mb-1">종료일</label>
+                          <input
+                            type="date"
+                            value={editForm.end_date}
+                            onChange={(e) => setEditForm({ ...editForm, end_date: e.target.value })}
                             className="w-full px-3 py-2 rounded-lg bg-[var(--color-bg-hover)] border border-[var(--color-border)] text-white text-sm focus:outline-none focus:border-[var(--color-accent)]"
                           />
                         </div>
