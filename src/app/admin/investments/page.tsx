@@ -30,6 +30,7 @@ export default function AdminInvestmentsPage() {
     start_date: '', end_date: '',
   })
   const [saving, setSaving] = useState(false)
+  const [deleting, setDeleting] = useState<string | null>(null)
   const [error, setError] = useState('')
 
   const loadInvestments = useCallback(async () => {
@@ -78,6 +79,22 @@ export default function AdminInvestmentsPage() {
 
     if (!error) await loadInvestments()
     setProcessing(null)
+  }
+
+  async function handleDelete(investmentId: string) {
+    if (!confirm('이 투자를 삭제하시겠습니까? 관련 지급 요청도 함께 삭제됩니다.')) return
+    setDeleting(investmentId)
+    const supabase = createClient()
+
+    await supabase.from('payment_requests').delete().eq('investment_id', investmentId)
+    const { error } = await supabase.from('investments').delete().eq('id', investmentId)
+
+    if (!error) {
+      await loadInvestments()
+    } else {
+      setError('삭제에 실패했습니다.')
+    }
+    setDeleting(null)
   }
 
   async function handleComplete(investmentId: string) {
@@ -342,6 +359,13 @@ export default function AdminInvestmentsPage() {
                           className="px-3 py-1.5 rounded-lg border border-[var(--color-border)] text-[var(--color-text-secondary)] text-xs hover:text-white transition-colors"
                         >
                           수정
+                        </button>
+                        <button
+                          onClick={() => handleDelete(inv.id)}
+                          disabled={deleting === inv.id}
+                          className="px-3 py-1.5 rounded-lg border border-red-500/30 text-red-400 text-xs hover:bg-red-500/10 transition-colors disabled:opacity-50"
+                        >
+                          {deleting === inv.id ? '삭제중...' : '삭제'}
                         </button>
                         {inv.status === 'pending' && (
                           <button
