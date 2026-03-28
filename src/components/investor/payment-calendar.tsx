@@ -7,6 +7,8 @@ import type { PaymentRequest, Investment } from '@/types'
 interface PaymentCalendarProps {
   payments: PaymentRequest[]
   investment: Investment
+  onRequestPayment: (date: string) => Promise<void>
+  todayRequested: boolean
 }
 
 function getDaysInMonth(year: number, month: number): number {
@@ -27,27 +29,32 @@ const STATUS_COLORS: Record<string, string> = {
   transferred: 'bg-green-500/60',
 }
 
-export function PaymentCalendar({ payments, investment }: PaymentCalendarProps) {
+const STATUS_LABELS: Record<string, string> = {
+  requested: '요청됨',
+  confirmed: '확인됨',
+  transferred: '송금완료',
+}
+
+export function PaymentCalendar({ payments, investment, onRequestPayment, todayRequested }: PaymentCalendarProps) {
   const startDate = investment.start_date ?? investment.created_at
   const start = new Date(startDate)
   const [selectedYear, setSelectedYear] = useState(start.getFullYear())
   const [selectedMonth, setSelectedMonth] = useState(start.getMonth())
+  const [requesting, setRequesting] = useState(false)
+  const [selectedDate, setSelectedDate] = useState<string | null>(null)
 
-  // 지급 시작일: 투자 시작일 + 7일
   const paymentStartDate = useMemo(() => {
     const d = new Date(startDate)
     d.setDate(d.getDate() + 7)
     return d
   }, [startDate])
 
-  // 지급 종료일: 시작일 + contract_days
   const paymentEndDate = useMemo(() => {
     const d = new Date(paymentStartDate)
     d.setDate(d.getDate() + investment.contract_days)
     return d
   }, [paymentStartDate, investment.contract_days])
 
-  // 지급 가능 날짜 Set (일요일 제외 for option2)
   const eligibleDates = useMemo(() => {
     const dates = new Set<string>()
     const d = new Date(paymentStartDate)
@@ -65,7 +72,6 @@ export function PaymentCalendar({ payments, investment }: PaymentCalendarProps) 
     return dates
   }, [paymentStartDate, paymentEndDate, investment.option])
 
-  // 월 옵션 생성
   const monthOptions = useMemo(() => {
     const options: { year: number; month: number; label: string }[] = []
     const d = new Date(start)
@@ -106,7 +112,23 @@ export function PaymentCalendar({ payments, investment }: PaymentCalendarProps) 
   const monthTotal = monthEligibleCount * investment.daily_payment
   const transferred = monthPayments.filter((p) => p.status === 'transferred')
   const transferredTotal = transferred.reduce((sum, p) => sum + p.amount, 0)
-  const requestedCount = monthPayments.length
+
+  async function handleDateClick(dateStr: string) {
+    if (dateStr !== todayStr) return
+    if (todayRequested) return
+    if (!eligibleDates.has(dateStr)) return
+    if (paymentMap[dateStr]) return
+
+    setSelectedDate(dateStr)
+  }
+
+  async function confirmRequest() {
+    if (!selectedDate) return
+    setRequesting(true)
+    await onRequestPayment(selectedDate)
+    setRequesting(false)
+    setSelectedDate(null)
+  }
 
   return (
     <div className="space-y-4">
@@ -133,7 +155,7 @@ export function PaymentCalendar({ payments, investment }: PaymentCalendarProps) 
       {/* 범례 */}
       <div className="flex gap-4 text-xs mb-3 flex-wrap">
         <span className="flex items-center gap-1.5">
-          <span className="w-3 h-3 rounded-sm bg-[var(--color-accent)]/20 border border-[var(--color-accent)]/40" /> 지급 가능
+          <span className="w-3 h-3 rounded-sm border border-[var(--color-accent)]/40 bg-[var(--color-accent)]/20" /> 지급 가능
         </span>
         <span className="flex items-center gap-1.5">
           <span className="w-3 h-3 rounded-sm bg-yellow-500/60" /> 요청됨
@@ -163,6 +185,7 @@ export function PaymentCalendar({ payments, investment }: PaymentCalendarProps) 
           const isEligible = eligibleDates.has(dateStr)
           const isSun = new Date(selectedYear, selectedMonth, day).getDay() === 0
           const isToday = dateStr === todayStr
+          const canClick = isToday && isEligible && !payment && !todayRequested
 
           let cellClass = 'text-[var(--color-text-muted)]'
 
@@ -175,15 +198,49 @@ export function PaymentCalendar({ payments, investment }: PaymentCalendarProps) 
           }
 
           return (
-            <div
+            <button
               key={day}
-              className={`relative py-2 rounded-md text-xs ${cellClass} ${isToday ? 'ring-1 ring-white/50' : ''}`}
+              type="button"
+              onClick={() => canClick && handleDateClick(dateStr)}
+              disabled={!canClick}
+              className={`relative py-2 rounded-md text-xs transition-all ${cellClass} ${
+                isToday ? 'ring-2 ring-white/70' : ''
+              } ${canClick ? 'cursor-pointer hover:ring-2 hover:ring-[var(--color-accent)]' : ''}`}
             >
               {day}
-            </div>
+              {payment && (
+                <span className="absolute -top-0.5 -right-0.5 w-1.5 h-1.5 rounded-full bg-white/80" />
+              )}
+            </button>
           )
         })}
       </div>
+
+      {/* 지급 요청 확인 팝업 */}
+      {selectedDate && (
+        <div className="bg-[var(--color-accent)]/10 border border-[var(--color-accent)]/30 rounded-xl p-5 space-y-3">
+          <p className="text-sm text-white font-medium">지급 요청 확인</p>
+          <p className="text-xs text-[var(--color-text-secondary)]">
+            {selectedDate} · {formatKRW(investment.daily_payment)}
+            {new Date().getHours() < 12 ? ' · 당일 송금' : ' · 익일 송금'}
+          </p>
+          <div className="flex gap-2">
+            <button
+              onClick={confirmRequest}
+              disabled={requesting}
+              className="px-4 py-2 rounded-lg bg-[var(--color-accent)] text-white text-sm font-medium hover:bg-[var(--color-accent-hover)] transition-colors disabled:opacity-50"
+            >
+              {requesting ? '요청 중...' : '지급 요청'}
+            </button>
+            <button
+              onClick={() => setSelectedDate(null)}
+              className="px-4 py-2 rounded-lg border border-[var(--color-border)] text-[var(--color-text-secondary)] text-sm hover:text-white transition-colors"
+            >
+              취소
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* 지급 시작일 안내 */}
       <div className="text-xs text-[var(--color-text-muted)] bg-[var(--color-bg-hover)] rounded-lg px-4 py-3">
@@ -204,7 +261,7 @@ export function PaymentCalendar({ payments, investment }: PaymentCalendarProps) 
         </div>
         <div className="flex justify-between text-sm">
           <span className="text-[var(--color-text-muted)]">요청 완료</span>
-          <span className="text-white">{requestedCount}건</span>
+          <span className="text-white">{monthPayments.length}건</span>
         </div>
         <div className="flex justify-between text-sm">
           <span className="text-[var(--color-text-muted)]">송금 완료</span>
@@ -233,7 +290,7 @@ export function PaymentCalendar({ payments, investment }: PaymentCalendarProps) 
                         : 'bg-yellow-500/20 text-yellow-400'
                   }`}
                 >
-                  {p.status === 'transferred' ? '완료' : p.status === 'confirmed' ? '확인' : '요청'}
+                  {STATUS_LABELS[p.status] ?? p.status}
                 </span>
               </div>
             ))}

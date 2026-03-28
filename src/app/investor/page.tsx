@@ -1,32 +1,28 @@
 'use client'
 
 import { useEffect, useState, useMemo } from 'react'
+import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { PageHeader } from '@/components/ui/page-header'
 import { StatCard } from '@/components/ui/stat-card'
 import { StatusBadge } from '@/components/ui/status-badge'
-import { formatKRW, formatKRWShort, formatDate, isBefore12PM, getPaymentDate } from '@/lib/utils'
+import { formatKRW, formatKRWShort, formatDate } from '@/lib/utils'
 import { INVESTMENT_OPTIONS } from '@/lib/constants'
 import type { Investment, PaymentRequest } from '@/types'
 
 export default function InvestorDashboard() {
+  const router = useRouter()
   const [investments, setInvestments] = useState<Investment[]>([])
   const [payments, setPayments] = useState<PaymentRequest[]>([])
-  const [todayRequested, setTodayRequested] = useState<Set<string>>(new Set())
   const [loading, setLoading] = useState(true)
-  const [requesting, setRequesting] = useState<string | null>(null)
-  const [userId, setUserId] = useState<string | null>(null)
 
   useEffect(() => {
     async function load() {
       const supabase = createClient()
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) return
-      setUserId(user.id)
 
-      const today = new Date().toISOString().split('T')[0]
-
-      const [invRes, payRes, todayRes] = await Promise.all([
+      const [invRes, payRes] = await Promise.all([
         supabase
           .from('investments')
           .select('*')
@@ -37,18 +33,10 @@ export default function InvestorDashboard() {
           .select('*')
           .eq('user_id', user.id)
           .order('created_at', { ascending: false }),
-        supabase
-          .from('payment_requests')
-          .select('investment_id')
-          .eq('user_id', user.id)
-          .eq('request_date', today),
       ])
 
       if (invRes.data) setInvestments(invRes.data)
       if (payRes.data) setPayments(payRes.data)
-      if (todayRes.data) {
-        setTodayRequested(new Set(todayRes.data.map((r) => r.investment_id)))
-      }
       setLoading(false)
     }
     load()
@@ -77,46 +65,39 @@ export default function InvestorDashboard() {
     [transferredPayments]
   )
 
-  async function handleRequestPayment(inv: Investment) {
-    if (!userId) return
-    setRequesting(inv.id)
+  // 마지막 지급 요청일로부터 경과 일수 계산
+  const missedDaysInfo = useMemo(() => {
+    const activeInvestments = investments.filter((inv) => inv.status === 'active')
+    if (activeInvestments.length === 0) return null
 
-    const supabase = createClient()
-    const today = new Date().toISOString().split('T')[0]
-    const sameDayFlag = isBefore12PM()
-    const paymentDate = getPaymentDate()
+    const today = new Date()
+    today.setHours(0, 0, 0, 0)
 
-    const { error } = await supabase
-      .from('payment_requests')
-      .insert({
-        investment_id: inv.id,
-        user_id: userId,
-        request_date: today,
-        payment_date: paymentDate,
-        amount: inv.daily_payment,
-        is_same_day: sameDayFlag,
-        status: 'requested',
-      })
+    let maxMissedDays = 0
 
-    if (!error) {
-      setTodayRequested((prev) => new Set([...prev, inv.id]))
-      setPayments((prev) => [{
-        id: crypto.randomUUID(),
-        investment_id: inv.id,
-        user_id: userId,
-        request_date: today,
-        payment_date: paymentDate,
-        amount: inv.daily_payment,
-        is_same_day: sameDayFlag,
-        status: 'requested' as const,
-        confirmed_at: null,
-        transferred_at: null,
-        created_at: new Date().toISOString(),
-      }, ...prev])
+    for (const inv of activeInvestments) {
+      const invPayments = payments.filter((p) => p.investment_id === inv.id)
+      if (invPayments.length === 0) {
+        // 지급 요청이 한 번도 없으면 시작일+7일부터 계산
+        const paymentStart = new Date(inv.start_date ?? inv.created_at)
+        paymentStart.setDate(paymentStart.getDate() + 7)
+        if (today >= paymentStart) {
+          const diff = Math.floor((today.getTime() - paymentStart.getTime()) / (1000 * 60 * 60 * 24))
+          maxMissedDays = Math.max(maxMissedDays, diff)
+        }
+      } else {
+        const lastRequest = invPayments
+          .map((p) => new Date(p.request_date))
+          .sort((a, b) => b.getTime() - a.getTime())[0]
+        const diff = Math.floor((today.getTime() - lastRequest.getTime()) / (1000 * 60 * 60 * 24))
+        if (diff > 0) {
+          maxMissedDays = Math.max(maxMissedDays, diff)
+        }
+      }
     }
 
-    setRequesting(null)
-  }
+    return maxMissedDays
+  }, [investments, payments])
 
   if (loading) {
     return (
@@ -129,6 +110,26 @@ export default function InvestorDashboard() {
   return (
     <div className="space-y-6">
       <PageHeader title="대시보드" description="투자 현황을 한눈에 확인하세요" />
+
+      {/* 미요청 알림 */}
+      {missedDaysInfo !== null && missedDaysInfo > 0 && (
+        <div className="bg-yellow-500/10 border border-yellow-500/20 rounded-xl p-5 flex items-center justify-between">
+          <div>
+            <p className="text-sm font-medium text-yellow-400">
+              {missedDaysInfo}일 동안 지급요청이 없었습니다.
+            </p>
+            <p className="text-xs text-yellow-400/70 mt-1">
+              지급 캘린더에서 요청하세요.
+            </p>
+          </div>
+          <button
+            onClick={() => router.push('/investor/calendar')}
+            className="px-4 py-2 rounded-lg bg-yellow-500/20 text-yellow-400 text-sm font-medium hover:bg-yellow-500/30 transition-colors"
+          >
+            지금 요청하기
+          </button>
+        </div>
+      )}
 
       {/* 상단 요약 4카드 */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -147,71 +148,41 @@ export default function InvestorDashboard() {
           </div>
         ) : (
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-            {investments.map((inv) => {
-              const alreadyRequested = todayRequested.has(inv.id)
-              const isActive = inv.status === 'active'
-              const canRequest = isActive && !alreadyRequested
-              const sameDayFlag = isBefore12PM()
-
-              return (
-                <div
-                  key={inv.id}
-                  className="bg-[var(--color-bg-card)] rounded-xl border border-[var(--color-border)] p-5 space-y-4"
-                >
-                  {/* 헤더: 옵션명 + 상태 */}
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <p className="text-sm font-medium text-white">
-                        {INVESTMENT_OPTIONS[inv.option].label}
-                      </p>
-                      <StatusBadge status={inv.status} />
-                    </div>
-                    {inv.start_date && (
-                      <span className="text-xs text-[var(--color-text-muted)]">
-                        시작 {formatDate(inv.start_date)}
-                      </span>
-                    )}
+            {investments.map((inv) => (
+              <div
+                key={inv.id}
+                className="bg-[var(--color-bg-card)] rounded-xl border border-[var(--color-border)] p-5 space-y-4"
+              >
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <p className="text-sm font-medium text-white">
+                      {INVESTMENT_OPTIONS[inv.option].label}
+                    </p>
+                    <StatusBadge status={inv.status} />
                   </div>
-
-                  {/* 금액 정보 */}
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <span className="text-xs text-[var(--color-text-muted)]">투자 금액</span>
-                      <p className="text-lg font-semibold text-white mt-0.5">
-                        {formatKRWShort(inv.amount)}
-                      </p>
-                    </div>
-                    <div>
-                      <span className="text-xs text-[var(--color-text-muted)]">일일 지급액</span>
-                      <p className="text-lg font-semibold text-[var(--color-accent)] mt-0.5">
-                        {formatKRW(inv.daily_payment)}
-                      </p>
-                    </div>
-                  </div>
-
-                  {/* 지급 요청 버튼 */}
-                  {isActive && (
-                    <button
-                      onClick={() => handleRequestPayment(inv)}
-                      disabled={!canRequest || requesting === inv.id}
-                      className={`w-full py-3 rounded-xl text-sm font-medium transition-all duration-200 ${
-                        canRequest
-                          ? 'bg-[var(--color-accent)] hover:bg-[var(--color-accent-hover)] text-white'
-                          : 'bg-[var(--color-bg-hover)] text-[var(--color-text-muted)] cursor-not-allowed'
-                      }`}
-                    >
-                      {requesting === inv.id
-                        ? '요청 중...'
-                        : alreadyRequested
-                          ? '오늘 이미 요청 완료'
-                          : sameDayFlag
-                            ? '지급 요청 (당일 송금)'
-                            : '지급 요청 (익일 송금)'}
-                    </button>
+                  {inv.start_date && (
+                    <span className="text-xs text-[var(--color-text-muted)]">
+                      시작 {formatDate(inv.start_date)}
+                    </span>
                   )}
                 </div>
-              )
-            })}
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <span className="text-xs text-[var(--color-text-muted)]">투자 금액</span>
+                    <p className="text-lg font-semibold text-white mt-0.5">
+                      {formatKRWShort(inv.amount)}
+                    </p>
+                  </div>
+                  <div>
+                    <span className="text-xs text-[var(--color-text-muted)]">일일 지급액</span>
+                    <p className="text-lg font-semibold text-[var(--color-accent)] mt-0.5">
+                      {formatKRW(inv.daily_payment)}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            ))}
           </div>
         )}
       </div>
