@@ -13,13 +13,16 @@ export default function CalendarPage() {
   const [loading, setLoading] = useState(true)
   const [requesting, setRequesting] = useState(false)
   const [selectedInvestmentId, setSelectedInvestmentId] = useState<string>('')
+  const [todayRequested, setTodayRequested] = useState<Set<string>>(new Set())
 
   const loadData = useCallback(async () => {
     const supabase = createClient()
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return
 
-    const [invRes, payRes] = await Promise.all([
+    const today = new Date().toISOString().split('T')[0]
+
+    const [invRes, payRes, todayRes] = await Promise.all([
       supabase
         .from('investments')
         .select('*')
@@ -30,6 +33,11 @@ export default function CalendarPage() {
         .select('*')
         .eq('user_id', user.id)
         .order('payment_date', { ascending: true }),
+      supabase
+        .from('payment_requests')
+        .select('investment_id')
+        .eq('user_id', user.id)
+        .eq('request_date', today),
     ])
 
     if (invRes.data) {
@@ -39,6 +47,9 @@ export default function CalendarPage() {
       }
     }
     if (payRes.data) setPayments(payRes.data)
+    if (todayRes.data) {
+      setTodayRequested(new Set(todayRes.data.map((r) => r.investment_id)))
+    }
     setLoading(false)
   }, [selectedInvestmentId])
 
@@ -63,13 +74,14 @@ export default function CalendarPage() {
       return
     }
 
+    const today = new Date().toISOString().split('T')[0]
     const paymentDate = getPaymentDate()
     const isSameDay = isBefore12PM()
 
     const { error } = await supabase.from('payment_requests').insert({
       investment_id: inv.id,
       user_id: user.id,
-      request_date: new Date().toISOString().split('T')[0],
+      request_date: today,
       payment_date: paymentDate,
       amount: inv.daily_payment,
       is_same_day: isSameDay,
@@ -77,6 +89,7 @@ export default function CalendarPage() {
     })
 
     if (!error) {
+      setTodayRequested((prev) => new Set([...prev, inv.id]))
       await loadData()
     }
     setRequesting(false)
@@ -84,8 +97,19 @@ export default function CalendarPage() {
 
   const selectedInvestment = investments.find((i) => i.id === selectedInvestmentId)
   const filteredPayments = payments.filter((p) => p.investment_id === selectedInvestmentId)
-  const todayStr = new Date().toISOString().split('T')[0]
-  const alreadyRequested = filteredPayments.some((p) => p.payment_date === todayStr || p.request_date === todayStr)
+  const alreadyRequested = todayRequested.has(selectedInvestmentId)
+
+  // 지급 시작일 체크 (투자 시작일 + 7일)
+  const canRequestToday = (() => {
+    if (!selectedInvestment?.start_date) return false
+    const paymentStart = new Date(selectedInvestment.start_date)
+    paymentStart.setDate(paymentStart.getDate() + 7)
+    const today = new Date()
+    today.setHours(0, 0, 0, 0)
+    return today >= paymentStart
+  })()
+
+  const sameDayFlag = isBefore12PM()
 
   if (loading) {
     return (
@@ -105,6 +129,7 @@ export default function CalendarPage() {
         </div>
       ) : (
         <>
+          {/* 투자 선택 */}
           {investments.length > 1 && (
             <div className="flex gap-2 overflow-x-auto pb-2">
               {investments.map((inv) => (
@@ -123,42 +148,51 @@ export default function CalendarPage() {
             </div>
           )}
 
+          {/* 지급 요청 */}
           <div className="bg-[var(--color-bg-card)] rounded-xl border border-[var(--color-border)] p-5">
             <div className="flex items-center justify-between mb-4">
               <div>
                 <h3 className="text-sm font-medium text-white">일일 지급 요청</h3>
                 {selectedInvestment && (
                   <p className="text-xs text-[var(--color-text-muted)] mt-1">
-                    일일 지급액: {formatKRW(selectedInvestment.daily_payment)}
+                    일일 지급액: <span className="text-[var(--color-accent)]">{formatKRW(selectedInvestment.daily_payment)}</span>
                   </p>
                 )}
               </div>
               <div className="text-right">
                 <p className="text-xs text-[var(--color-text-muted)]">
-                  {isBefore12PM() ? '오늘 지급 (12시 이전)' : '내일 지급 (12시 이후)'}
+                  {sameDayFlag ? '당일 송금 (12시 이전)' : '익일 송금 (12시 이후)'}
                 </p>
               </div>
             </div>
 
             <button
               onClick={handleRequestPayment}
-              disabled={requesting || alreadyRequested}
-              className="w-full py-3 rounded-lg bg-[var(--color-accent)] hover:bg-[var(--color-accent-hover)] text-white font-medium transition-colors disabled:opacity-50"
+              disabled={requesting || alreadyRequested || !canRequestToday}
+              className={`w-full py-3 rounded-xl text-sm font-medium transition-all duration-200 ${
+                !alreadyRequested && canRequestToday
+                  ? 'bg-[var(--color-accent)] hover:bg-[var(--color-accent-hover)] text-white'
+                  : 'bg-[var(--color-bg-hover)] text-[var(--color-text-muted)] cursor-not-allowed'
+              }`}
             >
               {requesting
                 ? '요청 중...'
                 : alreadyRequested
-                  ? '오늘 이미 요청함'
-                  : '지급 요청하기'}
+                  ? '오늘 이미 요청 완료'
+                  : !canRequestToday
+                    ? '지급 시작일 전입니다 (투자일 + 7일)'
+                    : sameDayFlag
+                      ? '지급 요청 (당일 송금)'
+                      : '지급 요청 (익일 송금)'}
             </button>
           </div>
 
+          {/* 캘린더 */}
           {selectedInvestment && (
             <div className="bg-[var(--color-bg-card)] rounded-xl border border-[var(--color-border)] p-5">
               <PaymentCalendar
                 payments={filteredPayments}
-                startDate={selectedInvestment.created_at}
-                months={selectedInvestment.option === 'option1' ? 12 : 6}
+                investment={selectedInvestment}
               />
             </div>
           )}
