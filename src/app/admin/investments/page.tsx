@@ -1,17 +1,16 @@
 'use client'
 
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useMemo } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { PageHeader } from '@/components/ui/page-header'
 import { StatusBadge } from '@/components/ui/status-badge'
-import { formatKRW, formatDate } from '@/lib/utils'
-import { INVESTMENT_OPTIONS } from '@/lib/constants'
+import { formatKRW, formatKRWShort, formatDate } from '@/lib/utils'
 import type { Investment, InvestmentStatus } from '@/types'
 
 type FilterStatus = 'all' | InvestmentStatus
 
 export default function AdminInvestmentsPage() {
-  const [investments, setInvestments] = useState<Investment[]>([])
+  const [allInvestments, setAllInvestments] = useState<Investment[]>([])
   const [loading, setLoading] = useState(true)
   const [filter, setFilter] = useState<FilterStatus>('all')
   const [processing, setProcessing] = useState<string | null>(null)
@@ -19,23 +18,34 @@ export default function AdminInvestmentsPage() {
   const loadInvestments = useCallback(async () => {
     const supabase = createClient()
 
-    let query = supabase
+    const { data } = await supabase
       .from('investments')
       .select('*, profiles(full_name, phone, email)')
       .order('created_at', { ascending: false })
 
-    if (filter !== 'all') {
-      query = query.eq('status', filter)
-    }
-
-    const { data } = await query
-    if (data) setInvestments(data)
+    if (data) setAllInvestments(data)
     setLoading(false)
-  }, [filter])
+  }, [])
 
   useEffect(() => {
     loadInvestments()
   }, [loadInvestments])
+
+  const filtered = useMemo(() => {
+    if (filter === 'all') return allInvestments
+    return allInvestments.filter((inv) => inv.status === filter)
+  }, [allInvestments, filter])
+
+  const stats = useMemo(() => {
+    const today = new Date().toISOString().split('T')[0]
+    const totalCount = allInvestments.length
+    const totalAmount = allInvestments.reduce((sum, inv) => sum + inv.amount, 0)
+    const activeCount = allInvestments.filter((inv) => inv.status === 'active').length
+    const todayPaymentCount = allInvestments.filter(
+      (inv) => inv.status === 'active' && inv.start_date && inv.start_date <= today
+    ).length
+    return { totalCount, totalAmount, activeCount, todayPaymentCount }
+  }, [allInvestments])
 
   async function handleActivate(investmentId: string) {
     setProcessing(investmentId)
@@ -53,10 +63,25 @@ export default function AdminInvestmentsPage() {
     setProcessing(null)
   }
 
+  async function handleComplete(investmentId: string) {
+    setProcessing(investmentId)
+    const supabase = createClient()
+
+    const { error } = await supabase
+      .from('investments')
+      .update({
+        status: 'completed',
+        end_date: new Date().toISOString().split('T')[0],
+      })
+      .eq('id', investmentId)
+
+    if (!error) await loadInvestments()
+    setProcessing(null)
+  }
+
   const filters: { label: string; value: FilterStatus }[] = [
     { label: '전체', value: 'all' },
     { label: '대기', value: 'pending' },
-    { label: '확인됨', value: 'confirmed' },
     { label: '운용중', value: 'active' },
     { label: '완료', value: 'completed' },
     { label: '취소', value: 'cancelled' },
@@ -74,6 +99,15 @@ export default function AdminInvestmentsPage() {
     <div className="space-y-6">
       <PageHeader title="투자 관리" description="전체 투자 내역을 조회하고 상태를 관리하세요" />
 
+      {/* 요약 통계 */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <StatCard label="전체 투자건수" value={`${stats.totalCount}건`} />
+        <StatCard label="총 투자금액" value={formatKRWShort(stats.totalAmount)} accent />
+        <StatCard label="활성 투자건수" value={`${stats.activeCount}건`} />
+        <StatCard label="오늘 지급 예정" value={`${stats.todayPaymentCount}건`} />
+      </div>
+
+      {/* 필터 탭 */}
       <div className="flex gap-2 overflow-x-auto pb-2">
         {filters.map((f) => (
           <button
@@ -90,60 +124,71 @@ export default function AdminInvestmentsPage() {
         ))}
       </div>
 
+      {/* 투자 목록 */}
       <div className="bg-[var(--color-bg-card)] rounded-xl border border-[var(--color-border)]">
-        {investments.length === 0 ? (
+        {filtered.length === 0 ? (
           <p className="text-sm text-[var(--color-text-muted)] p-5">해당하는 투자 내역이 없습니다.</p>
         ) : (
           <div className="divide-y divide-[var(--color-border)]">
-            {investments.map((inv) => {
+            {filtered.map((inv) => {
               const profile = inv.profiles as unknown as { full_name: string; phone: string; email: string } | undefined
 
               return (
                 <div key={inv.id} className="p-5">
                   <div className="flex items-start justify-between gap-4">
                     <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-3 mb-2">
+                      <div className="flex items-center gap-3 mb-3">
                         <p className="text-sm font-medium text-white">{profile?.full_name ?? '—'}</p>
+                        {profile?.phone && (
+                          <span className="text-xs text-[var(--color-text-muted)]">{profile.phone}</span>
+                        )}
                         <StatusBadge status={inv.status} />
                       </div>
 
-                      <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 text-xs">
-                        <div>
-                          <span className="text-[var(--color-text-muted)]">투자옵션</span>
-                          <p className="text-white mt-0.5">{INVESTMENT_OPTIONS[inv.option].label.split('—')[0].trim()}</p>
-                        </div>
+                      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4 text-xs">
                         <div>
                           <span className="text-[var(--color-text-muted)]">투자금액</span>
-                          <p className="text-white mt-0.5">{formatKRW(inv.amount)}</p>
+                          <p className="text-white font-medium mt-0.5">{formatKRWShort(inv.amount)}</p>
+                          <p className="text-[var(--color-text-muted)] mt-0.5">{formatKRW(inv.amount)}</p>
                         </div>
                         <div>
                           <span className="text-[var(--color-text-muted)]">일일지급액</span>
-                          <p className="text-[var(--color-accent)] mt-0.5">{formatKRW(inv.daily_payment)}</p>
+                          <p className="text-[var(--color-accent)] font-medium mt-0.5">{formatKRW(inv.daily_payment)}</p>
                         </div>
                         <div>
                           <span className="text-[var(--color-text-muted)]">계좌정보</span>
                           <p className="text-white mt-0.5">{inv.bank_name} {inv.account_number}</p>
+                          <p className="text-[var(--color-text-muted)] mt-0.5">예금주: {inv.account_holder}</p>
                         </div>
                         <div>
                           <span className="text-[var(--color-text-muted)]">시작일</span>
                           <p className="text-white mt-0.5">{inv.start_date ? formatDate(inv.start_date) : '—'}</p>
                         </div>
-                      </div>
-
-                      <div className="mt-2 text-xs text-[var(--color-text-muted)]">
-                        예금주: {inv.account_holder} · 계약 {inv.contract_days}일 · 등록 {formatDate(inv.created_at)}
-                        {inv.signed_at && ` · 서명 ${formatDate(inv.signed_at)}`}
+                        <div>
+                          <span className="text-[var(--color-text-muted)]">계약기간</span>
+                          <p className="text-white mt-0.5">{inv.contract_days}일</p>
+                          <p className="text-[var(--color-text-muted)] mt-0.5">등록 {formatDate(inv.created_at)}</p>
+                        </div>
                       </div>
                     </div>
 
-                    <div className="shrink-0">
+                    <div className="flex gap-2 shrink-0">
                       {inv.status === 'pending' && (
                         <button
                           onClick={() => handleActivate(inv.id)}
                           disabled={processing === inv.id}
                           className="px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-xs font-medium transition-colors disabled:opacity-50"
                         >
-                          {processing === inv.id ? '처리중...' : '운용 시작'}
+                          {processing === inv.id ? '처리중...' : '활성화'}
+                        </button>
+                      )}
+                      {inv.status === 'active' && (
+                        <button
+                          onClick={() => handleComplete(inv.id)}
+                          disabled={processing === inv.id}
+                          className="px-3 py-1.5 rounded-lg bg-green-600 hover:bg-green-700 text-white text-xs font-medium transition-colors disabled:opacity-50"
+                        >
+                          {processing === inv.id ? '처리중...' : '완료처리'}
                         </button>
                       )}
                     </div>
@@ -154,6 +199,17 @@ export default function AdminInvestmentsPage() {
           </div>
         )}
       </div>
+    </div>
+  )
+}
+
+function StatCard({ label, value, accent }: { label: string; value: string; accent?: boolean }) {
+  return (
+    <div className="bg-[var(--color-bg-card)] rounded-xl border border-[var(--color-border)] p-4">
+      <p className="text-xs text-[var(--color-text-muted)]">{label}</p>
+      <p className={`text-lg font-semibold mt-1 ${accent ? 'text-[var(--color-accent)]' : 'text-white'}`}>
+        {value}
+      </p>
     </div>
   )
 }

@@ -2,6 +2,19 @@ export function formatKRW(amount: number): string {
   return new Intl.NumberFormat('ko-KR').format(amount) + '원'
 }
 
+export function formatKRWShort(amount: number): string {
+  if (amount >= 100_000_000) {
+    const eok = Math.floor(amount / 100_000_000)
+    const remainder = amount % 100_000_000
+    const man = Math.floor(remainder / 10_000)
+    return man > 0 ? `${eok}억 ${new Intl.NumberFormat('ko-KR').format(man)}만원` : `${eok}억원`
+  }
+  if (amount >= 10_000) {
+    return `${new Intl.NumberFormat('ko-KR').format(Math.floor(amount / 10_000))}만원`
+  }
+  return formatKRW(amount)
+}
+
 export function formatUSD(amount: number): string {
   return '$' + new Intl.NumberFormat('en-US').format(amount)
 }
