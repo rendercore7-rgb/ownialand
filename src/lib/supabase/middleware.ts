@@ -57,16 +57,11 @@ export async function updateSession(request: NextRequest) {
 
     const role = profile.role
 
-    // DEBUG: 미들웨어 role 확인
-    console.log(`[middleware] path=${path}, role=${role}`)
-
     // 각 경로에 허용된 role 매핑
     const allowed =
       (path.startsWith('/admin') && role === 'admin') ||
       (path.startsWith('/sales') && (role === 'sales' || role === 'admin')) ||
       (path.startsWith('/investor') && (role === 'investor' || role === 'admin'))
-
-    console.log(`[middleware] allowed=${allowed}`)
 
     if (!allowed) {
       const redirectMap: Record<string, string> = {
@@ -74,10 +69,8 @@ export async function updateSession(request: NextRequest) {
         sales: '/sales',
         investor: '/investor',
       }
-      const dest = redirectMap[role] ?? '/'
-      console.log(`[middleware] REDIRECTING to ${dest}`)
       const url = request.nextUrl.clone()
-      url.pathname = dest
+      url.pathname = redirectMap[role] ?? '/'
       return NextResponse.redirect(url)
     }
   }
