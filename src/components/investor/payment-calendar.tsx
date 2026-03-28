@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useMemo } from 'react'
-import { formatKRW } from '@/lib/utils'
+import { formatKRW, isBefore12PM } from '@/lib/utils'
 import type { PaymentRequest, Investment } from '@/types'
 
 interface PaymentCalendarProps {
@@ -23,18 +23,6 @@ function toDateStr(year: number, month: number, day: number): string {
   return `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`
 }
 
-const STATUS_COLORS: Record<string, string> = {
-  requested: 'bg-yellow-500/60',
-  confirmed: 'bg-blue-500/60',
-  transferred: 'bg-green-500/60',
-}
-
-const STATUS_LABELS: Record<string, string> = {
-  requested: '요청됨',
-  confirmed: '확인됨',
-  transferred: '송금완료',
-}
-
 export function PaymentCalendar({ payments, investment, onRequestPayment, todayRequested }: PaymentCalendarProps) {
   const startDate = investment.start_date ?? investment.created_at
   const start = new Date(startDate)
@@ -42,6 +30,8 @@ export function PaymentCalendar({ payments, investment, onRequestPayment, todayR
   const [selectedMonth, setSelectedMonth] = useState(start.getMonth())
   const [requesting, setRequesting] = useState(false)
   const [selectedDate, setSelectedDate] = useState<string | null>(null)
+
+  const todayStr = new Date().toISOString().split('T')[0]
 
   const paymentStartDate = useMemo(() => {
     const d = new Date(startDate)
@@ -55,6 +45,7 @@ export function PaymentCalendar({ payments, investment, onRequestPayment, todayR
     return d
   }, [paymentStartDate, investment.contract_days])
 
+  // 지급 가능 날짜
   const eligibleDates = useMemo(() => {
     const dates = new Set<string>()
     const d = new Date(paymentStartDate)
@@ -72,6 +63,24 @@ export function PaymentCalendar({ payments, investment, onRequestPayment, todayR
     return dates
   }, [paymentStartDate, paymentEndDate, investment.option])
 
+  // 요청된 날짜 Set
+  const requestedDates = useMemo(() => {
+    const dates = new Set<string>()
+    for (const p of payments) {
+      dates.add(p.payment_date)
+    }
+    return dates
+  }, [payments])
+
+  // 결제 맵
+  const paymentMap = useMemo(() => {
+    const map: Record<string, PaymentRequest> = {}
+    for (const p of payments) {
+      map[p.payment_date] = p
+    }
+    return map
+  }, [payments])
+
   const monthOptions = useMemo(() => {
     const options: { year: number; month: number; label: string }[] = []
     const d = new Date(start)
@@ -87,17 +96,8 @@ export function PaymentCalendar({ payments, investment, onRequestPayment, todayR
     return options
   }, [startDate, investment.option])
 
-  const paymentMap = useMemo(() => {
-    const map: Record<string, PaymentRequest> = {}
-    for (const p of payments) {
-      map[p.payment_date] = p
-    }
-    return map
-  }, [payments])
-
   const daysInMonth = getDaysInMonth(selectedYear, selectedMonth)
   const firstDay = getFirstDayOfMonth(selectedYear, selectedMonth)
-  const todayStr = new Date().toISOString().split('T')[0]
 
   const monthPayments = payments.filter((p) => {
     const d = new Date(p.payment_date)
@@ -109,15 +109,27 @@ export function PaymentCalendar({ payments, investment, onRequestPayment, todayR
     return date.getFullYear() === selectedYear && date.getMonth() === selectedMonth
   }).length
 
+  // 미지급 일수 (지급 가능인데 요청 안 한 과거 날짜)
+  const missedDates = useMemo(() => {
+    const missed: string[] = []
+    for (const d of eligibleDates) {
+      if (d <= todayStr && !requestedDates.has(d)) {
+        missed.push(d)
+      }
+    }
+    return missed
+  }, [eligibleDates, requestedDates, todayStr])
+
   const monthTotal = monthEligibleCount * investment.daily_payment
   const transferred = monthPayments.filter((p) => p.status === 'transferred')
   const transferredTotal = transferred.reduce((sum, p) => sum + p.amount, 0)
 
-  async function handleDateClick(dateStr: string) {
-    if (dateStr !== todayStr) return
-    if (todayRequested) return
+  function handleDateClick(dateStr: string) {
+    // 오늘 또는 과거 미요청 날짜 클릭 가능
     if (!eligibleDates.has(dateStr)) return
-    if (paymentMap[dateStr]) return
+    if (requestedDates.has(dateStr)) return
+    if (dateStr > todayStr) return // 미래는 불가
+    if (dateStr === todayStr && todayRequested) return
 
     setSelectedDate(dateStr)
   }
@@ -132,6 +144,13 @@ export function PaymentCalendar({ payments, investment, onRequestPayment, todayR
 
   return (
     <div className="space-y-4">
+      {/* 미지급 알림 */}
+      {missedDates.length > 0 && (
+        <div className="bg-red-500/10 border border-red-500/20 rounded-lg p-3 text-xs text-red-400">
+          미지급 {missedDates.length}일 — 날짜를 클릭하여 요청하세요
+        </div>
+      )}
+
       {/* 월 선택 */}
       <div className="flex items-center gap-3 overflow-x-auto pb-2">
         {monthOptions.map((opt) => (
@@ -153,9 +172,9 @@ export function PaymentCalendar({ payments, investment, onRequestPayment, todayR
       </div>
 
       {/* 범례 */}
-      <div className="flex gap-4 text-xs mb-3 flex-wrap">
+      <div className="flex gap-3 text-xs flex-wrap">
         <span className="flex items-center gap-1.5">
-          <span className="w-3 h-3 rounded-sm border border-[var(--color-accent)]/40 bg-[var(--color-accent)]/20" /> 지급 가능
+          <span className="w-3 h-3 rounded-sm bg-red-500/60" /> 미지급
         </span>
         <span className="flex items-center gap-1.5">
           <span className="w-3 h-3 rounded-sm bg-yellow-500/60" /> 요청됨
@@ -165,6 +184,9 @@ export function PaymentCalendar({ payments, investment, onRequestPayment, todayR
         </span>
         <span className="flex items-center gap-1.5">
           <span className="w-3 h-3 rounded-sm bg-green-500/60" /> 송금완료
+        </span>
+        <span className="flex items-center gap-1.5">
+          <span className="w-3 h-3 rounded-sm border border-[var(--color-accent)]/40 bg-[var(--color-accent)]/20" /> 지급 예정
         </span>
       </div>
 
@@ -185,16 +207,27 @@ export function PaymentCalendar({ payments, investment, onRequestPayment, todayR
           const isEligible = eligibleDates.has(dateStr)
           const isSun = new Date(selectedYear, selectedMonth, day).getDay() === 0
           const isToday = dateStr === todayStr
-          const canClick = isToday && isEligible && !payment && !todayRequested
+          const isPast = dateStr <= todayStr
+          const isMissed = isEligible && isPast && !payment // 지급 가능인데 요청 안 함
+          const isFutureEligible = isEligible && !isPast && !payment
+          const canClick = isMissed || (isToday && isEligible && !payment && !todayRequested)
 
           let cellClass = 'text-[var(--color-text-muted)]'
 
           if (payment) {
-            cellClass = `${STATUS_COLORS[payment.status] ?? 'bg-gray-500/30'} text-white`
-          } else if (isEligible) {
+            // 상태별 색상
+            const statusColors: Record<string, string> = {
+              requested: 'bg-yellow-500/60 text-white',
+              confirmed: 'bg-blue-500/60 text-white',
+              transferred: 'bg-green-500/60 text-white',
+            }
+            cellClass = statusColors[payment.status] ?? 'bg-gray-500/30 text-white'
+          } else if (isMissed) {
+            cellClass = 'bg-red-500/40 text-white'
+          } else if (isFutureEligible) {
             cellClass = 'bg-[var(--color-accent)]/10 border border-[var(--color-accent)]/30 text-[var(--color-accent)]'
-          } else if (isSun) {
-            cellClass = 'text-red-400/50'
+          } else if (isSun && investment.option === 'option2') {
+            cellClass = 'text-red-400/30'
           }
 
           return (
@@ -202,15 +235,11 @@ export function PaymentCalendar({ payments, investment, onRequestPayment, todayR
               key={day}
               type="button"
               onClick={() => canClick && handleDateClick(dateStr)}
-              disabled={!canClick}
               className={`relative py-2 rounded-md text-xs transition-all ${cellClass} ${
                 isToday ? 'ring-2 ring-white/70' : ''
-              } ${canClick ? 'cursor-pointer hover:ring-2 hover:ring-[var(--color-accent)]' : ''}`}
+              } ${canClick ? 'cursor-pointer hover:ring-2 hover:ring-[var(--color-accent)]' : 'cursor-default'}`}
             >
               {day}
-              {payment && (
-                <span className="absolute -top-0.5 -right-0.5 w-1.5 h-1.5 rounded-full bg-white/80" />
-              )}
             </button>
           )
         })}
@@ -222,7 +251,9 @@ export function PaymentCalendar({ payments, investment, onRequestPayment, todayR
           <p className="text-sm text-white font-medium">지급 요청 확인</p>
           <p className="text-xs text-[var(--color-text-secondary)]">
             {selectedDate} · {formatKRW(investment.daily_payment)}
-            {new Date().getHours() < 12 ? ' · 당일 송금' : ' · 익일 송금'}
+            {selectedDate === todayStr
+              ? isBefore12PM() ? ' · 당일 송금' : ' · 익일 송금'
+              : ' · 소급 요청'}
           </p>
           <div className="flex gap-2">
             <button
@@ -260,6 +291,13 @@ export function PaymentCalendar({ payments, investment, onRequestPayment, todayR
           <span className="text-white">{formatKRW(monthTotal)}</span>
         </div>
         <div className="flex justify-between text-sm">
+          <span className="text-[var(--color-text-muted)]">미지급일</span>
+          <span className="text-red-400">{missedDates.filter((d) => {
+            const date = new Date(d)
+            return date.getFullYear() === selectedYear && date.getMonth() === selectedMonth
+          }).length}일</span>
+        </div>
+        <div className="flex justify-between text-sm">
           <span className="text-[var(--color-text-muted)]">요청 완료</span>
           <span className="text-white">{monthPayments.length}건</span>
         </div>
@@ -290,7 +328,7 @@ export function PaymentCalendar({ payments, investment, onRequestPayment, todayR
                         : 'bg-yellow-500/20 text-yellow-400'
                   }`}
                 >
-                  {STATUS_LABELS[p.status] ?? p.status}
+                  {p.status === 'transferred' ? '완료' : p.status === 'confirmed' ? '확인' : '요청'}
                 </span>
               </div>
             ))}
