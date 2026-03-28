@@ -156,27 +156,28 @@ export default function InvestmentsPage() {
                 </div>
               </div>
 
-              {inv.status === 'pending' && !inv.signed_at && (
-                <div className="mt-4 pt-4 border-t border-[var(--color-border)]">
+              <div className="mt-4 pt-4 border-t border-[var(--color-border)]">
+                {inv.signed_at ? (
+                  <div className="flex items-center gap-3">
+                    <span className="px-3 py-1.5 rounded-lg bg-green-500/10 text-green-400 text-sm font-medium">
+                      서명 완료
+                    </span>
+                    <button
+                      onClick={() => setSelectedInvestment(inv)}
+                      className="px-3 py-1.5 rounded-lg border border-[var(--color-border)] text-[var(--color-text-secondary)] text-xs hover:text-white transition-colors"
+                    >
+                      차용증 보기
+                    </button>
+                  </div>
+                ) : inv.status === 'pending' ? (
                   <button
                     onClick={() => setSelectedInvestment(inv)}
                     className="px-4 py-2 rounded-lg bg-[var(--color-accent)] hover:bg-[var(--color-accent-hover)] text-white text-sm font-medium transition-colors"
                   >
                     차용증 서명하기
                   </button>
-                </div>
-              )}
-
-              {inv.signed_at && (
-                <div className="mt-4 pt-4 border-t border-[var(--color-border)]">
-                  <button
-                    onClick={() => setSelectedInvestment(inv)}
-                    className="px-4 py-2 rounded-lg border border-[var(--color-border)] text-[var(--color-text-secondary)] text-sm hover:text-white transition-colors"
-                  >
-                    차용증 확인
-                  </button>
-                </div>
-              )}
+                ) : null}
+              </div>
             </div>
           ))}
         </div>
