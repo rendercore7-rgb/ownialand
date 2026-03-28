@@ -130,12 +130,12 @@ export default function AdminPaymentsPage() {
                           <p className="text-white mt-0.5">{formatDate(p.payment_date)}</p>
                         </div>
                         <div>
-                          <span className="text-[var(--color-text-muted)]">금액</span>
+                          <span className="text-[var(--color-text-muted)]">일일지급액</span>
                           <p className="text-[var(--color-accent)] mt-0.5">{formatKRW(p.amount)}</p>
                         </div>
                         <div>
-                          <span className="text-[var(--color-text-muted)]">당일지급</span>
-                          <p className="text-white mt-0.5">{p.is_same_day ? '예' : '아니오'}</p>
+                          <span className="text-[var(--color-text-muted)]">지급구분</span>
+                          <p className="text-white mt-0.5">{p.is_same_day ? '당일' : '익일'}</p>
                         </div>
                       </div>
                       {inv && (
@@ -155,7 +155,7 @@ export default function AdminPaymentsPage() {
                           {processing === p.id ? '처리중...' : '확인'}
                         </button>
                       )}
-                      {(p.status === 'requested' || p.status === 'confirmed') && (
+                      {p.status === 'confirmed' && (
                         <button
                           onClick={() => handleTransfer(p.id)}
                           disabled={processing === p.id}
