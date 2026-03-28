@@ -14,11 +14,16 @@ export default function CalendarPage() {
   const [requesting, setRequesting] = useState(false)
   const [selectedInvestmentId, setSelectedInvestmentId] = useState<string>('')
   const [todayRequested, setTodayRequested] = useState<Set<string>>(new Set())
+  const [debugInfo, setDebugInfo] = useState('')
 
   const loadData = useCallback(async () => {
     const supabase = createClient()
     const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return
+    if (!user) {
+      setDebugInfo('로그인 정보 없음')
+      setLoading(false)
+      return
+    }
 
     const today = new Date().toISOString().split('T')[0]
 
@@ -39,6 +44,12 @@ export default function CalendarPage() {
         .eq('user_id', user.id)
         .eq('request_date', today),
     ])
+
+    if (invRes.error) {
+      setDebugInfo(`투자 조회 실패: ${invRes.error.message}`)
+    } else {
+      setDebugInfo(`투자 ${invRes.data?.length ?? 0}건 조회됨 (uid: ${user.id})`)
+    }
 
     if (invRes.data) {
       setInvestments(invRes.data)
@@ -122,6 +133,12 @@ export default function CalendarPage() {
   return (
     <div className="space-y-6">
       <PageHeader title="지급 캘린더" description="일일 지급을 요청하고 현황을 확인하세요" />
+
+      {debugInfo && (
+        <div className="p-3 rounded-lg bg-yellow-500/10 border border-yellow-500/20 text-yellow-400 text-xs">
+          {debugInfo}
+        </div>
+      )}
 
       {investments.length === 0 ? (
         <div className="text-center py-16">
