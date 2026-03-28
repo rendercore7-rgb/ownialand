@@ -17,6 +17,7 @@ interface EditForm {
   account_holder: string
   start_date: string
   end_date: string
+  created_at: string
 }
 
 export default function AdminInvestmentsPage() {
@@ -27,7 +28,7 @@ export default function AdminInvestmentsPage() {
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editForm, setEditForm] = useState<EditForm>({
     full_name: '', phone: '', bank_name: '', account_number: '', account_holder: '',
-    start_date: '', end_date: '',
+    start_date: '', end_date: '', created_at: '',
   })
   const [saving, setSaving] = useState(false)
   const [deleting, setDeleting] = useState<string | null>(null)
@@ -124,6 +125,7 @@ export default function AdminInvestmentsPage() {
       account_holder: inv.account_holder,
       start_date: inv.start_date ?? '',
       end_date: inv.end_date ?? '',
+      created_at: inv.created_at?.split('T')[0] ?? '',
     })
     setError('')
   }
@@ -159,6 +161,7 @@ export default function AdminInvestmentsPage() {
           account_holder: editForm.account_holder,
           start_date: editForm.start_date || null,
           end_date: editForm.end_date || null,
+          created_at: editForm.created_at ? new Date(editForm.created_at).toISOString() : undefined,
         })
         .eq('id', inv.id)
 
@@ -281,7 +284,16 @@ export default function AdminInvestmentsPage() {
                           />
                         </div>
                         <div>
-                          <label className="block text-xs text-[var(--color-text-muted)] mb-1">시작일</label>
+                          <label className="block text-xs text-[var(--color-text-muted)] mb-1">등록일</label>
+                          <input
+                            type="date"
+                            value={editForm.created_at}
+                            onChange={(e) => setEditForm({ ...editForm, created_at: e.target.value })}
+                            className="w-full px-3 py-2 rounded-lg bg-[var(--color-bg-hover)] border border-[var(--color-border)] text-white text-sm focus:outline-none focus:border-[var(--color-accent)]"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs text-[var(--color-text-muted)] mb-1">시작일 (지급 기준)</label>
                           <input
                             type="date"
                             value={editForm.start_date}
