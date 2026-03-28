@@ -120,7 +120,20 @@ export default function AdminPaymentsPage() {
                         <p className="text-sm font-medium text-white">{profile?.full_name ?? '—'}</p>
                         <StatusBadge status={p.status} />
                       </div>
-                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+                      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 text-xs">
+                        <div>
+                          <span className="text-[var(--color-text-muted)]">투자금액</span>
+                          <p className="text-white mt-0.5">{inv ? formatKRW(inv.amount) : '—'}</p>
+                        </div>
+                        <div>
+                          <span className="text-[var(--color-text-muted)]">일일지급액</span>
+                          <p className="text-[var(--color-accent)] mt-0.5">{formatKRW(p.amount)}</p>
+                        </div>
+                        <div>
+                          <span className="text-[var(--color-text-muted)]">계좌정보</span>
+                          <p className="text-white mt-0.5">{inv ? `${inv.bank_name} ${inv.account_number}` : '—'}</p>
+                          {inv && <p className="text-[var(--color-text-muted)] mt-0.5">예금주: {inv.account_holder}</p>}
+                        </div>
                         <div>
                           <span className="text-[var(--color-text-muted)]">요청일</span>
                           <p className="text-white mt-0.5">{formatDate(p.request_date)}</p>
@@ -130,19 +143,10 @@ export default function AdminPaymentsPage() {
                           <p className="text-white mt-0.5">{formatDate(p.payment_date)}</p>
                         </div>
                         <div>
-                          <span className="text-[var(--color-text-muted)]">일일지급액</span>
-                          <p className="text-[var(--color-accent)] mt-0.5">{formatKRW(p.amount)}</p>
-                        </div>
-                        <div>
                           <span className="text-[var(--color-text-muted)]">지급구분</span>
                           <p className="text-white mt-0.5">{p.is_same_day ? '당일' : '익일'}</p>
                         </div>
                       </div>
-                      {inv && (
-                        <div className="mt-2 text-xs text-[var(--color-text-muted)]">
-                          {inv.bank_name} · {inv.account_number} · {inv.account_holder} · 투자 {formatKRW(inv.amount)}
-                        </div>
-                      )}
                     </div>
 
                     <div className="flex gap-2 shrink-0">
