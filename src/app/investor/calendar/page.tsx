@@ -61,7 +61,7 @@ export default function CalendarPage() {
     loadData()
   }, [loadData])
 
-  async function handleRequestPayment() {
+  async function handleRequestPayment(targetDate: string) {
     if (!selectedInvestmentId || !userId) return
 
     const supabase = createClient()
@@ -69,21 +69,22 @@ export default function CalendarPage() {
     if (!inv) return
 
     const today = new Date().toISOString().split('T')[0]
-    const paymentDate = getPaymentDate()
-    const isSameDay = isBefore12PM()
+    const isToday = targetDate === today
 
     const { error } = await supabase.from('payment_requests').insert({
       investment_id: inv.id,
       user_id: userId,
       request_date: today,
-      payment_date: paymentDate,
+      payment_date: targetDate,
       amount: inv.daily_payment,
-      is_same_day: isSameDay,
+      is_same_day: isToday ? isBefore12PM() : false,
       status: 'requested',
     })
 
     if (!error) {
-      setTodayRequested((prev) => new Set([...prev, inv.id]))
+      if (isToday) {
+        setTodayRequested((prev) => new Set([...prev, inv.id]))
+      }
       await loadData()
     }
   }
