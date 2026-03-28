@@ -131,7 +131,7 @@ export default function InvestmentsPage() {
                 <div>
                   <p className="text-sm font-medium text-white">{INVESTMENT_OPTIONS[inv.option].label}</p>
                   <p className="text-xs text-[var(--color-text-muted)] mt-1">
-                    등록일: {formatDate(inv.created_at)}
+                    시작일: {inv.start_date ? formatDate(inv.start_date) : '미정'} · 등록일: {formatDate(inv.created_at)}
                   </p>
                 </div>
                 <StatusBadge status={inv.status} />
