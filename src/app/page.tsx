@@ -34,14 +34,14 @@ export default function LoginPage() {
       return
     }
 
-    const { data: profile, error: profileError } = await supabase
+    const { data: profile } = await supabase
       .from('profiles')
       .select('role')
       .eq('id', user.id)
       .single()
 
     if (!profile) {
-      setError(`프로필 조회 실패: ${profileError?.message ?? '데이터 없음'} (uid: ${user.id})`)
+      setError('프로필을 찾을 수 없습니다.')
       setLoading(false)
       return
     }
