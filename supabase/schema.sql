@@ -6,6 +6,49 @@
 create extension if not exists "uuid-ossp";
 
 -- =============================================
+-- Clean up existing objects (safe re-run)
+-- =============================================
+do $$ begin
+  drop trigger if exists sales_journals_updated_at on sales_journals;
+exception when undefined_table then null;
+end $$;
+do $$ begin
+  drop trigger if exists lands_updated_at on lands;
+exception when undefined_table then null;
+end $$;
+do $$ begin
+  drop trigger if exists investments_updated_at on investments;
+exception when undefined_table then null;
+end $$;
+do $$ begin
+  drop trigger if exists profiles_updated_at on profiles;
+exception when undefined_table then null;
+end $$;
+do $$ begin
+  drop trigger if exists on_auth_user_created on auth.users;
+exception when undefined_table then null;
+end $$;
+
+drop function if exists handle_new_user() cascade;
+drop function if exists update_updated_at() cascade;
+
+drop table if exists sales_records cascade;
+drop table if exists sales_journals cascade;
+drop table if exists land_transactions cascade;
+drop table if exists lands cascade;
+drop table if exists payment_requests cascade;
+drop table if exists investments cascade;
+drop table if exists profiles cascade;
+
+drop type if exists sales_team;
+drop type if exists user_role;
+drop type if exists investment_option;
+drop type if exists payment_request_status;
+drop type if exists investment_status;
+drop type if exists land_status;
+drop type if exists land_grade;
+
+-- =============================================
 -- ENUM Types
 -- =============================================
 create type land_grade as enum ('central_crystal', 'skyline', 'neon', 'riverside', 'startup');

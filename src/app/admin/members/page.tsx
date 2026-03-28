@@ -1,10 +1,27 @@
 'use client'
 
 import { useEffect, useState, useCallback } from 'react'
-import { createClient } from '@/lib/supabase/client'
 import { PageHeader } from '@/components/ui/page-header'
 import { formatDate } from '@/lib/utils'
 import type { Profile, UserRole, SalesTeam } from '@/types'
+
+interface CreateForm {
+  email: string
+  password: string
+  full_name: string
+  phone: string
+  role: UserRole
+  sales_team: SalesTeam | ''
+}
+
+const initialCreateForm: CreateForm = {
+  email: '',
+  password: '',
+  full_name: '',
+  phone: '',
+  role: 'investor',
+  sales_team: '',
+}
 
 export default function AdminMembersPage() {
   const [members, setMembers] = useState<Profile[]>([])
@@ -13,17 +30,24 @@ export default function AdminMembersPage() {
   const [editForm, setEditForm] = useState({ full_name: '', phone: '', role: '' as UserRole, sales_team: '' as SalesTeam | '' })
   const [saving, setSaving] = useState(false)
   const [roleFilter, setRoleFilter] = useState<'all' | UserRole>('all')
+  const [showCreate, setShowCreate] = useState(false)
+  const [createForm, setCreateForm] = useState<CreateForm>(initialCreateForm)
+  const [creating, setCreating] = useState(false)
+  const [error, setError] = useState('')
 
   const loadMembers = useCallback(async () => {
-    const supabase = createClient()
-
-    let query = supabase.from('profiles').select('*').order('created_at', { ascending: false })
-    if (roleFilter !== 'all') {
-      query = query.eq('role', roleFilter)
+    try {
+      const res = await fetch('/api/admin/members')
+      const json = await res.json()
+      if (json.success) {
+        const filtered = roleFilter === 'all'
+          ? json.data
+          : json.data.filter((m: Profile) => m.role === roleFilter)
+        setMembers(filtered)
+      }
+    } catch {
+      setError('회원 목록을 불러오는데 실패했습니다.')
     }
-
-    const { data } = await query
-    if (data) setMembers(data)
     setLoading(false)
   }, [roleFilter])
 
@@ -43,25 +67,59 @@ export default function AdminMembersPage() {
 
   async function handleSave(memberId: string) {
     setSaving(true)
-    const supabase = createClient()
+    setError('')
 
-    const updateData: Record<string, unknown> = {
-      full_name: editForm.full_name,
-      phone: editForm.phone,
-      role: editForm.role,
-      sales_team: editForm.sales_team || null,
-    }
+    try {
+      const res = await fetch(`/api/admin/members/${memberId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          full_name: editForm.full_name,
+          phone: editForm.phone,
+          role: editForm.role,
+          sales_team: editForm.sales_team || null,
+        }),
+      })
 
-    const { error } = await supabase
-      .from('profiles')
-      .update(updateData)
-      .eq('id', memberId)
-
-    if (!error) {
-      setEditingId(null)
-      await loadMembers()
+      const json = await res.json()
+      if (json.success) {
+        setEditingId(null)
+        await loadMembers()
+      } else {
+        setError(json.error ?? '수정에 실패했습니다.')
+      }
+    } catch {
+      setError('수정 요청에 실패했습니다.')
     }
     setSaving(false)
+  }
+
+  async function handleCreate() {
+    setCreating(true)
+    setError('')
+
+    try {
+      const res = await fetch('/api/admin/members', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ...createForm,
+          sales_team: createForm.sales_team || null,
+        }),
+      })
+
+      const json = await res.json()
+      if (json.success) {
+        setShowCreate(false)
+        setCreateForm(initialCreateForm)
+        await loadMembers()
+      } else {
+        setError(json.error ?? '회원 생성에 실패했습니다.')
+      }
+    } catch {
+      setError('회원 생성 요청에 실패했습니다.')
+    }
+    setCreating(false)
   }
 
   const roleFilters: { label: string; value: 'all' | UserRole }[] = [
@@ -86,7 +144,98 @@ export default function AdminMembersPage() {
 
   return (
     <div className="space-y-6">
-      <PageHeader title="회원 관리" description="전체 회원 정보를 확인하고 수정하세요" />
+      <div className="flex items-center justify-between">
+        <PageHeader title="회원 관리" description="전체 회원 정보를 확인하고 수정하세요" />
+        <button
+          onClick={() => setShowCreate(!showCreate)}
+          className="px-4 py-2 rounded-lg bg-[var(--color-accent)] text-white text-sm font-medium hover:opacity-90 transition-opacity"
+        >
+          {showCreate ? '취소' : '+ 회원 추가'}
+        </button>
+      </div>
+
+      {error && (
+        <div className="p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 text-sm">
+          {error}
+        </div>
+      )}
+
+      {showCreate && (
+        <div className="bg-[var(--color-bg-card)] rounded-xl border border-[var(--color-border)] p-5 space-y-4">
+          <h3 className="text-sm font-medium text-white">새 회원 등록</h3>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs text-[var(--color-text-muted)] mb-1">이름 *</label>
+              <input
+                value={createForm.full_name}
+                onChange={(e) => setCreateForm({ ...createForm, full_name: e.target.value })}
+                placeholder="홍길동"
+                className="w-full px-3 py-2 rounded-lg bg-[var(--color-bg-hover)] border border-[var(--color-border)] text-white text-sm focus:outline-none focus:border-[var(--color-accent)]"
+              />
+            </div>
+            <div>
+              <label className="block text-xs text-[var(--color-text-muted)] mb-1">이메일 *</label>
+              <input
+                type="email"
+                value={createForm.email}
+                onChange={(e) => setCreateForm({ ...createForm, email: e.target.value })}
+                placeholder="user@example.com"
+                className="w-full px-3 py-2 rounded-lg bg-[var(--color-bg-hover)] border border-[var(--color-border)] text-white text-sm focus:outline-none focus:border-[var(--color-accent)]"
+              />
+            </div>
+            <div>
+              <label className="block text-xs text-[var(--color-text-muted)] mb-1">비밀번호 *</label>
+              <input
+                type="password"
+                value={createForm.password}
+                onChange={(e) => setCreateForm({ ...createForm, password: e.target.value })}
+                placeholder="6자 이상"
+                className="w-full px-3 py-2 rounded-lg bg-[var(--color-bg-hover)] border border-[var(--color-border)] text-white text-sm focus:outline-none focus:border-[var(--color-accent)]"
+              />
+            </div>
+            <div>
+              <label className="block text-xs text-[var(--color-text-muted)] mb-1">전화번호</label>
+              <input
+                value={createForm.phone}
+                onChange={(e) => setCreateForm({ ...createForm, phone: e.target.value })}
+                placeholder="010-1234-5678"
+                className="w-full px-3 py-2 rounded-lg bg-[var(--color-bg-hover)] border border-[var(--color-border)] text-white text-sm focus:outline-none focus:border-[var(--color-accent)]"
+              />
+            </div>
+            <div>
+              <label className="block text-xs text-[var(--color-text-muted)] mb-1">역할 *</label>
+              <select
+                value={createForm.role}
+                onChange={(e) => setCreateForm({ ...createForm, role: e.target.value as UserRole })}
+                className="w-full px-3 py-2 rounded-lg bg-[var(--color-bg-hover)] border border-[var(--color-border)] text-white text-sm"
+              >
+                <option value="investor">투자자</option>
+                <option value="admin">관리자</option>
+                <option value="sales">영업</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs text-[var(--color-text-muted)] mb-1">영업 팀</label>
+              <select
+                value={createForm.sales_team}
+                onChange={(e) => setCreateForm({ ...createForm, sales_team: e.target.value as SalesTeam | '' })}
+                className="w-full px-3 py-2 rounded-lg bg-[var(--color-bg-hover)] border border-[var(--color-border)] text-white text-sm"
+              >
+                <option value="">없음</option>
+                <option value="team1">Team 1</option>
+                <option value="team2">Team 2</option>
+              </select>
+            </div>
+          </div>
+          <button
+            onClick={handleCreate}
+            disabled={creating || !createForm.email || !createForm.password || !createForm.full_name}
+            className="px-6 py-2 rounded-lg bg-[var(--color-accent)] text-white text-sm font-medium disabled:opacity-50 hover:opacity-90 transition-opacity"
+          >
+            {creating ? '생성 중...' : '회원 생성'}
+          </button>
+        </div>
+      )}
 
       <div className="flex gap-2 overflow-x-auto pb-2">
         {roleFilters.map((f) => (
