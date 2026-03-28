@@ -29,11 +29,11 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
       const { data: profile } = await supabase
         .from('profiles')
-        .select('is_admin')
+        .select('role')
         .eq('id', user.id)
         .single()
 
-      if (!profile?.is_admin) {
+      if (profile?.role !== 'admin') {
         router.replace('/')
         return
       }

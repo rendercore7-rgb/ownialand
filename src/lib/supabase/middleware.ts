@@ -13,7 +13,7 @@ export async function updateSession(request: NextRequest) {
           return request.cookies.getAll()
         },
         setAll(cookiesToSet) {
-          cookiesToSet.forEach(({ name, value, options }) =>
+          cookiesToSet.forEach(({ name, value }) =>
             request.cookies.set(name, value)
           )
           supabaseResponse = NextResponse.next({ request })
@@ -31,34 +31,47 @@ export async function updateSession(request: NextRequest) {
 
   const path = request.nextUrl.pathname
 
-  // 인증 필요 경로
   const protectedPaths = ['/investor', '/admin', '/sales']
   const isProtected = protectedPaths.some((p) => path.startsWith(p))
 
+  // 미인증 → 로그인으로
   if (!user && isProtected) {
     const url = request.nextUrl.clone()
     url.pathname = '/'
     return NextResponse.redirect(url)
   }
 
+  // 인증된 사용자 → role 기반 접근 제어
   if (user && isProtected) {
     const { data: profile } = await supabase
       .from('profiles')
-      .select('role, is_admin')
+      .select('role')
       .eq('id', user.id)
       .single()
 
-    if (profile) {
-      if (path.startsWith('/admin') && !profile.is_admin) {
-        const url = request.nextUrl.clone()
-        url.pathname = '/'
-        return NextResponse.redirect(url)
+    if (!profile) {
+      const url = request.nextUrl.clone()
+      url.pathname = '/'
+      return NextResponse.redirect(url)
+    }
+
+    const role = profile.role
+
+    // 각 경로에 허용된 role 매핑
+    const allowed =
+      (path.startsWith('/admin') && role === 'admin') ||
+      (path.startsWith('/sales') && (role === 'sales' || role === 'admin')) ||
+      (path.startsWith('/investor') && (role === 'investor' || role === 'admin'))
+
+    if (!allowed) {
+      const redirectMap: Record<string, string> = {
+        admin: '/admin',
+        sales: '/sales',
+        investor: '/investor',
       }
-      if (path.startsWith('/sales') && profile.role !== 'sales' && !profile.is_admin) {
-        const url = request.nextUrl.clone()
-        url.pathname = '/'
-        return NextResponse.redirect(url)
-      }
+      const url = request.nextUrl.clone()
+      url.pathname = redirectMap[role] ?? '/'
+      return NextResponse.redirect(url)
     }
   }
 

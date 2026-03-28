@@ -6,7 +6,7 @@ import { createClient } from '@/lib/supabase/client'
 export default function LoginPage() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
-  const [mode, setMode] = useState<'investor' | 'sales'>('investor')
+  const [mode, setMode] = useState<'investor' | 'sales' | 'admin'>('investor')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
@@ -36,7 +36,7 @@ export default function LoginPage() {
 
     const { data: profile } = await supabase
       .from('profiles')
-      .select('role, is_admin')
+      .select('role')
       .eq('id', user.id)
       .single()
 
@@ -46,13 +46,13 @@ export default function LoginPage() {
       return
     }
 
-    if (profile.is_admin) {
-      window.location.href = '/admin'
-    } else if (profile.role === 'sales') {
-      window.location.href = '/sales'
-    } else {
-      window.location.href = '/investor'
+    const redirectMap: Record<string, string> = {
+      admin: '/admin',
+      sales: '/sales',
+      investor: '/investor',
     }
+
+    window.location.href = redirectMap[profile.role] ?? '/investor'
   }
 
   return (
