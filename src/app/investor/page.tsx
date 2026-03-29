@@ -153,32 +153,26 @@ export default function InvestorDashboard() {
                 key={inv.id}
                 className="bg-[var(--color-bg-card)] rounded-xl border border-[var(--color-border)] p-5 space-y-4"
               >
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <p className="text-sm font-medium text-white">
-                      {INVESTMENT_OPTIONS[inv.option].label}
-                    </p>
-                    <StatusBadge status={inv.status} />
-                  </div>
+                <div className="flex flex-wrap items-center gap-2 mb-1">
+                  <p className="text-sm font-medium text-white truncate">
+                    {INVESTMENT_OPTIONS[inv.option].label}
+                  </p>
+                  <StatusBadge status={inv.status} />
                   {inv.start_date && (
                     <span className="text-xs text-[var(--color-text-muted)]">
-                      시작 {formatDate(inv.start_date)}
+                      · 시작 {formatDate(inv.start_date)}
                     </span>
                   )}
                 </div>
 
-                <div className="grid grid-cols-2 gap-4">
+                <div className="flex items-center gap-6">
                   <div>
-                    <span className="text-xs text-[var(--color-text-muted)]">투자 금액</span>
-                    <p className="text-lg font-semibold text-white mt-0.5">
-                      {formatKRWShort(inv.amount)}
-                    </p>
+                    <span className="text-[10px] text-[var(--color-text-muted)]">투자 금액</span>
+                    <p className="text-base font-semibold text-white">{formatKRWShort(inv.amount)}</p>
                   </div>
                   <div>
-                    <span className="text-xs text-[var(--color-text-muted)]">일일 지급액</span>
-                    <p className="text-lg font-semibold text-[var(--color-accent)] mt-0.5">
-                      {formatKRW(inv.daily_payment)}
-                    </p>
+                    <span className="text-[10px] text-[var(--color-text-muted)]">일일 지급액</span>
+                    <p className="text-base font-semibold text-[var(--color-accent)]">{formatKRW(inv.daily_payment)}</p>
                   </div>
                 </div>
               </div>
