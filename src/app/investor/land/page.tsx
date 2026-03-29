@@ -53,26 +53,34 @@ export default function LandPage() {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return
 
-    const [landRes, txRes] = await Promise.all([
-      supabase
+    // lands: 10,000행 → 1,000행씩 분할 로드
+    const allLands: Land[] = []
+    let from = 0
+    const pageSize = 1000
+    while (true) {
+      const { data } = await supabase
         .from('lands')
         .select('id, grid_x, grid_y, grade, status, price, owner_id, profiles(full_name)')
-        .order('grid_x', { ascending: true }),
-      supabase
-        .from('land_transactions')
-        .select('*')
-        .eq('buyer_id', user.id)
-        .order('created_at', { ascending: false }),
-    ])
-
-    if (landRes.data) {
-      const map = new Map<string, Land>()
-      for (const land of landRes.data) {
-        map.set(`${land.grid_x}-${land.grid_y}`, land as unknown as Land)
-      }
-      setLands(map)
+        .range(from, from + pageSize - 1)
+      if (!data || data.length === 0) break
+      allLands.push(...(data as unknown as Land[]))
+      if (data.length < pageSize) break
+      from += pageSize
     }
-    if (txRes.data) setTransactions(txRes.data)
+
+    const map = new Map<string, Land>()
+    for (const land of allLands) {
+      map.set(`${land.grid_x}-${land.grid_y}`, land)
+    }
+    setLands(map)
+
+    const { data: txData } = await supabase
+      .from('land_transactions')
+      .select('*')
+      .eq('buyer_id', user.id)
+      .order('created_at', { ascending: false })
+
+    if (txData) setTransactions(txData)
     setLoading(false)
   }, [])
 
