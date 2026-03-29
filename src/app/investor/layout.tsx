@@ -4,7 +4,7 @@ import { Sidebar } from '@/components/ui/sidebar'
 
 const navItems = [
   { label: '대시보드', href: '/investor', icon: '◈' },
-  { label: '내 투자', href: '/investor/investments', icon: '▦' },
+  { label: '도시참여', href: '/investor/investments', icon: '▦' },
   { label: '지급 캘린더', href: '/investor/calendar', icon: '◫' },
   { label: 'LAND 구매', href: '/investor/land', icon: '◩' },
 ]

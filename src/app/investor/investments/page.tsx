@@ -78,7 +78,7 @@ export default function InvestmentsPage() {
     return (
       <div className="space-y-6">
         <PageHeader
-          title="새 투자 등록"
+          title="신규참여 등록"
           action={
             <button
               onClick={() => setShowForm(false)}
@@ -98,14 +98,14 @@ export default function InvestmentsPage() {
   return (
     <div className="space-y-6">
       <PageHeader
-        title="내 투자"
-        description="투자 목록 및 새 투자를 등록하세요"
+        title="도시참여"
+        description="참여 목록 및 신규참여를 등록하세요"
         action={
           <button
             onClick={() => setShowForm(true)}
             className="px-4 py-2.5 rounded-lg bg-[var(--color-accent)] hover:bg-[var(--color-accent-hover)] text-white text-sm font-medium transition-colors"
           >
-            + 새 투자
+            + 신규참여
           </button>
         }
       />
@@ -117,7 +117,7 @@ export default function InvestmentsPage() {
             onClick={() => setShowForm(true)}
             className="px-6 py-3 rounded-lg bg-[var(--color-accent)] hover:bg-[var(--color-accent-hover)] text-white font-medium transition-colors"
           >
-            첫 투자 등록하기
+            첫 참여 등록하기
           </button>
         </div>
       ) : (

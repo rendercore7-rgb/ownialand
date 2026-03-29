@@ -148,7 +148,7 @@ export default function InvestorDashboard() {
 
       {/* 투자 카드 목록 */}
       <div className="space-y-4">
-        <h3 className="text-sm font-medium text-white">내 투자 목록</h3>
+        <h3 className="text-sm font-medium text-white">도시참여 목록</h3>
         {investments.length === 0 ? (
           <div className="bg-[var(--color-bg-card)] rounded-xl border border-[var(--color-border)] p-8 text-center">
             <p className="text-sm text-[var(--color-text-muted)]">등록된 투자가 없습니다.</p>
