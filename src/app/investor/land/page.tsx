@@ -1,41 +1,136 @@
 'use client'
 
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { PageHeader } from '@/components/ui/page-header'
 import { StatCard } from '@/components/ui/stat-card'
 import { StatusBadge } from '@/components/ui/status-badge'
 import { formatUSD, formatDate } from '@/lib/utils'
 import { LAND_GRADES, CELL_SIZE_PYEONG } from '@/lib/constants'
-import type { LandTransaction, LandGrade } from '@/types'
+import type { Land, LandTransaction, LandGrade } from '@/types'
+
+const GRID_SIZE = 100
+const CELL_PX = 6
+const CANVAS_SIZE = GRID_SIZE * CELL_PX
+
+// 등급별 색상 (절대 변경 금지)
+const GRADE_COLORS: Record<LandGrade, string> = {
+  central_crystal: '#f5a623',
+  skyline: '#8b5cf6',
+  neon: '#3b82f6',
+  riverside: '#22c55e',
+  startup: '#9ca3af',
+}
+
+const GRADE_COLORS_SOLD: Record<LandGrade, string> = {
+  central_crystal: '#7a5312',
+  skyline: '#46307b',
+  neon: '#1e4178',
+  riverside: '#11632e',
+  startup: '#4e5156',
+}
+
+interface SelectedCell {
+  x: number
+  y: number
+  land: Land | null
+}
 
 export default function LandPage() {
+  const canvasRef = useRef<HTMLCanvasElement>(null)
+  const [lands, setLands] = useState<Map<string, Land>>(new Map())
   const [transactions, setTransactions] = useState<LandTransaction[]>([])
   const [loading, setLoading] = useState(true)
+  const [selectedCell, setSelectedCell] = useState<SelectedCell | null>(null)
   const [showPurchase, setShowPurchase] = useState(false)
   const [selectedGrade, setSelectedGrade] = useState<LandGrade>('riverside')
   const [cells, setCells] = useState(1)
   const [paymentMethod, setPaymentMethod] = useState<'usdt' | 'bank'>('bank')
   const [submitting, setSubmitting] = useState(false)
 
-  const loadTransactions = useCallback(async () => {
+  const loadData = useCallback(async () => {
     const supabase = createClient()
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return
 
-    const { data } = await supabase
-      .from('land_transactions')
-      .select('*')
-      .eq('buyer_id', user.id)
-      .order('created_at', { ascending: false })
+    const [landRes, txRes] = await Promise.all([
+      supabase
+        .from('lands')
+        .select('id, grid_x, grid_y, grade, status, price, owner_id, profiles(full_name)')
+        .order('grid_x', { ascending: true }),
+      supabase
+        .from('land_transactions')
+        .select('*')
+        .eq('buyer_id', user.id)
+        .order('created_at', { ascending: false }),
+    ])
 
-    if (data) setTransactions(data)
+    if (landRes.data) {
+      const map = new Map<string, Land>()
+      for (const land of landRes.data) {
+        map.set(`${land.grid_x}-${land.grid_y}`, land as unknown as Land)
+      }
+      setLands(map)
+    }
+    if (txRes.data) setTransactions(txRes.data)
     setLoading(false)
   }, [])
 
   useEffect(() => {
-    loadTransactions()
-  }, [loadTransactions])
+    loadData()
+  }, [loadData])
+
+  // 캔버스 렌더링
+  useEffect(() => {
+    const canvas = canvasRef.current
+    if (!canvas || lands.size === 0) return
+    const ctx = canvas.getContext('2d')
+    if (!ctx) return
+
+    ctx.fillStyle = '#1a1a2e'
+    ctx.fillRect(0, 0, CANVAS_SIZE, CANVAS_SIZE)
+
+    for (let x = 0; x < GRID_SIZE; x++) {
+      for (let y = 0; y < GRID_SIZE; y++) {
+        const land = lands.get(`${x}-${y}`)
+        if (!land) {
+          ctx.fillStyle = '#1a1a2e'
+        } else if (land.status === 'sold') {
+          ctx.fillStyle = GRADE_COLORS_SOLD[land.grade as LandGrade] ?? '#333'
+        } else {
+          ctx.fillStyle = GRADE_COLORS[land.grade as LandGrade] ?? '#555'
+        }
+        ctx.fillRect(x * CELL_PX, y * CELL_PX, CELL_PX - 1, CELL_PX - 1)
+      }
+    }
+
+    // 선택된 셀 하이라이트
+    if (selectedCell) {
+      ctx.strokeStyle = '#ffffff'
+      ctx.lineWidth = 2
+      ctx.strokeRect(
+        selectedCell.x * CELL_PX - 1,
+        selectedCell.y * CELL_PX - 1,
+        CELL_PX + 1,
+        CELL_PX + 1
+      )
+    }
+  }, [lands, selectedCell])
+
+  function handleCanvasClick(e: React.MouseEvent<HTMLCanvasElement>) {
+    const canvas = canvasRef.current
+    if (!canvas) return
+    const rect = canvas.getBoundingClientRect()
+    const scaleX = CANVAS_SIZE / rect.width
+    const scaleY = CANVAS_SIZE / rect.height
+    const x = Math.floor((e.clientX - rect.left) * scaleX / CELL_PX)
+    const y = Math.floor((e.clientY - rect.top) * scaleY / CELL_PX)
+
+    if (x < 0 || x >= GRID_SIZE || y < 0 || y >= GRID_SIZE) return
+
+    const land = lands.get(`${x}-${y}`) ?? null
+    setSelectedCell({ x, y, land })
+  }
 
   async function handlePurchase() {
     setSubmitting(true)
@@ -61,7 +156,7 @@ export default function LandPage() {
     if (!error) {
       setShowPurchase(false)
       setCells(1)
-      await loadTransactions()
+      await loadData()
     }
     setSubmitting(false)
   }
@@ -70,6 +165,16 @@ export default function LandPage() {
     .filter((t) => t.status === 'approved')
     .reduce((sum) => sum + 1, 0)
   const totalPyeong = totalCells * CELL_SIZE_PYEONG
+
+  // 등급별 통계
+  const gradeStats = Array.from(lands.values()).reduce((acc, land) => {
+    const grade = land.grade as LandGrade
+    if (!acc[grade]) acc[grade] = { total: 0, sold: 0, available: 0 }
+    acc[grade].total++
+    if (land.status === 'sold') acc[grade].sold++
+    else acc[grade].available++
+    return acc
+  }, {} as Record<LandGrade, { total: number; sold: number; available: number }>)
 
   if (loading) {
     return (
@@ -82,8 +187,8 @@ export default function LandPage() {
   return (
     <div className="space-y-6">
       <PageHeader
-        title="LAND 구매"
-        description="OWNIA LAND를 구매하세요"
+        title="LAND 지도"
+        description="OWNIA LAND 지도를 확인하고 구매하세요"
         action={
           <button
             onClick={() => setShowPurchase(!showPurchase)}
@@ -100,6 +205,105 @@ export default function LandPage() {
         <StatCard label="구매 신청" value={`${transactions.length}건`} />
       </div>
 
+      {/* 캔버스 그리드 + 정보 패널 */}
+      <div className="grid grid-cols-1 lg:grid-cols-[1fr_280px] gap-4">
+        <div className="bg-[var(--color-bg-card)] rounded-xl border border-[var(--color-border)] p-4">
+          {/* 범례 */}
+          <div className="flex flex-wrap gap-3 mb-4 text-xs">
+            {(Object.entries(GRADE_COLORS) as [LandGrade, string][]).map(([grade, color]) => (
+              <span key={grade} className="flex items-center gap-1.5">
+                <span className="w-3 h-3 rounded-sm" style={{ backgroundColor: color }} />
+                {LAND_GRADES[grade].label}
+              </span>
+            ))}
+            <span className="flex items-center gap-1.5">
+              <span className="w-3 h-3 rounded-sm bg-gray-700" /> Sold
+            </span>
+          </div>
+
+          {/* 캔버스 */}
+          <canvas
+            ref={canvasRef}
+            width={CANVAS_SIZE}
+            height={CANVAS_SIZE}
+            onClick={handleCanvasClick}
+            className="w-full aspect-square rounded-lg cursor-crosshair"
+            style={{ imageRendering: 'pixelated' }}
+          />
+        </div>
+
+        {/* 셀 정보 패널 */}
+        <div className="bg-[var(--color-bg-card)] rounded-xl border border-[var(--color-border)] p-5 space-y-4">
+          <h3 className="text-sm font-medium text-white">셀 정보</h3>
+
+          {selectedCell ? (
+            selectedCell.land ? (
+              <div className="space-y-3 text-sm">
+                <div>
+                  <span className="text-[var(--color-text-muted)] text-xs">좌표</span>
+                  <p className="text-white">({selectedCell.x}, {selectedCell.y})</p>
+                </div>
+                <div>
+                  <span className="text-[var(--color-text-muted)] text-xs">등급</span>
+                  <div className="flex items-center gap-2 mt-0.5">
+                    <span
+                      className="w-3 h-3 rounded-full"
+                      style={{ backgroundColor: GRADE_COLORS[selectedCell.land.grade as LandGrade] }}
+                    />
+                    <span className="text-white">{LAND_GRADES[selectedCell.land.grade as LandGrade]?.label}</span>
+                  </div>
+                </div>
+                <div>
+                  <span className="text-[var(--color-text-muted)] text-xs">가격</span>
+                  <p className="text-[var(--color-accent)]">{formatUSD(selectedCell.land.price)}</p>
+                </div>
+                <div>
+                  <span className="text-[var(--color-text-muted)] text-xs">상태</span>
+                  <div className="mt-0.5">
+                    <StatusBadge status={selectedCell.land.status} />
+                  </div>
+                </div>
+                {selectedCell.land.status === 'sold' && (
+                  <div>
+                    <span className="text-[var(--color-text-muted)] text-xs">소유자</span>
+                    <p className="text-white">
+                      {(selectedCell.land as unknown as { profiles?: { full_name: string } }).profiles?.full_name ?? '—'}
+                    </p>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <p className="text-sm text-[var(--color-text-muted)]">
+                ({selectedCell.x}, {selectedCell.y}) — 데이터 없음
+              </p>
+            )
+          ) : (
+            <p className="text-sm text-[var(--color-text-muted)]">셀을 클릭하여 정보를 확인하세요</p>
+          )}
+
+          {/* 등급별 현황 */}
+          <div className="border-t border-[var(--color-border)] pt-4 space-y-2">
+            <h4 className="text-xs text-[var(--color-text-muted)]">등급별 현황</h4>
+            {(Object.entries(GRADE_COLORS) as [LandGrade, string][]).map(([grade, color]) => {
+              const stat = gradeStats[grade]
+              if (!stat) return null
+              return (
+                <div key={grade} className="flex items-center justify-between text-xs">
+                  <div className="flex items-center gap-1.5">
+                    <span className="w-2 h-2 rounded-full" style={{ backgroundColor: color }} />
+                    <span className="text-[var(--color-text-secondary)]">{LAND_GRADES[grade].label}</span>
+                  </div>
+                  <span className="text-[var(--color-text-muted)]">
+                    {stat.sold}/{stat.total}
+                  </span>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      </div>
+
+      {/* 구매 폼 */}
       {showPurchase && (
         <div className="bg-[var(--color-bg-card)] rounded-xl border border-[var(--color-border)] p-6 space-y-5">
           <h3 className="text-lg font-medium text-white">LAND 구매 신청</h3>
@@ -119,7 +323,7 @@ export default function LandPage() {
                     }`}
                   >
                     <div className="flex items-center gap-2 mb-1">
-                      <span className="w-3 h-3 rounded-full" style={{ backgroundColor: grade.color }} />
+                      <span className="w-3 h-3 rounded-full" style={{ backgroundColor: GRADE_COLORS[key] }} />
                       <span className="text-sm font-medium text-white">{grade.label}</span>
                     </div>
                     <p className="text-sm text-[var(--color-accent)]">{formatUSD(grade.price)}/셀</p>
@@ -199,6 +403,7 @@ export default function LandPage() {
         </div>
       )}
 
+      {/* 구매 내역 */}
       <div className="bg-[var(--color-bg-card)] rounded-xl border border-[var(--color-border)] p-5">
         <h3 className="text-sm font-medium text-white mb-4">구매 내역</h3>
         {transactions.length === 0 ? (
