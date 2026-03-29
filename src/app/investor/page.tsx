@@ -6,14 +6,15 @@ import { createClient } from '@/lib/supabase/client'
 import { PageHeader } from '@/components/ui/page-header'
 import { StatCard } from '@/components/ui/stat-card'
 import { StatusBadge } from '@/components/ui/status-badge'
-import { formatKRW, formatKRWShort, formatDate } from '@/lib/utils'
-import { INVESTMENT_OPTIONS } from '@/lib/constants'
-import type { Investment, PaymentRequest } from '@/types'
+import { formatKRW, formatKRWShort, formatUSD, formatDate } from '@/lib/utils'
+import { INVESTMENT_OPTIONS, LAND_GRADES } from '@/lib/constants'
+import type { Investment, PaymentRequest, LandTransaction, LandGrade } from '@/types'
 
 export default function InvestorDashboard() {
   const router = useRouter()
   const [investments, setInvestments] = useState<Investment[]>([])
   const [payments, setPayments] = useState<PaymentRequest[]>([])
+  const [landTxs, setLandTxs] = useState<LandTransaction[]>([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
@@ -22,7 +23,7 @@ export default function InvestorDashboard() {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) return
 
-      const [invRes, payRes] = await Promise.all([
+      const [invRes, payRes, landRes] = await Promise.all([
         supabase
           .from('investments')
           .select('*')
@@ -33,10 +34,16 @@ export default function InvestorDashboard() {
           .select('*')
           .eq('user_id', user.id)
           .order('created_at', { ascending: false }),
+        supabase
+          .from('land_transactions')
+          .select('*')
+          .eq('buyer_id', user.id)
+          .order('created_at', { ascending: false }),
       ])
 
       if (invRes.data) setInvestments(invRes.data)
       if (payRes.data) setPayments(payRes.data)
+      if (landRes.data) setLandTxs(landRes.data)
       setLoading(false)
     }
     load()
@@ -177,6 +184,41 @@ export default function InvestorDashboard() {
                 </div>
               </div>
             ))}
+          </div>
+        )}
+      </div>
+
+      {/* LAND 구매 내역 */}
+      <div className="space-y-4">
+        <h3 className="text-sm font-medium text-white">LAND 구매 내역</h3>
+        {landTxs.length === 0 ? (
+          <div className="bg-[var(--color-bg-card)] rounded-xl border border-[var(--color-border)] p-8 text-center">
+            <p className="text-sm text-[var(--color-text-muted)]">LAND 구매 내역이 없습니다.</p>
+          </div>
+        ) : (
+          <div className="bg-[var(--color-bg-card)] rounded-xl border border-[var(--color-border)]">
+            <div className="divide-y divide-[var(--color-border)]">
+              {landTxs.map((tx) => (
+                <div key={tx.id} className="flex items-center justify-between p-4">
+                  <div className="flex items-center gap-3">
+                    <span
+                      className="w-3 h-3 rounded-full shrink-0"
+                      style={{ backgroundColor: LAND_GRADES[tx.grade]?.color }}
+                    />
+                    <div>
+                      <p className="text-sm text-white">{LAND_GRADES[tx.grade]?.label}</p>
+                      <p className="text-xs text-[var(--color-text-muted)] mt-0.5">
+                        {formatDate(tx.created_at)} · {tx.payment_method === 'usdt' ? 'USDT' : '계좌이체'}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <span className="text-sm text-[var(--color-accent)]">{formatUSD(tx.price)}</span>
+                    <StatusBadge status={tx.status} />
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
         )}
       </div>
