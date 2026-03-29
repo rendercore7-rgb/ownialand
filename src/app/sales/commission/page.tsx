@@ -250,9 +250,6 @@ export default function CommissionPage() {
                 'text-[var(--color-text-secondary)]'
               }>{simResult.newTier} ({(simResult.newRate * 100).toFixed(0)}%)</span>
             </div>
-            <div className="text-xs text-[var(--color-text-muted)] pt-3 border-t border-[var(--color-border)] leading-relaxed">
-              팀 인센티브는 팀 전체 매출의 3%를 팀장 30% / 팀원 70% (매출 비중별)로 월말 정산 후 별도 지급됩니다.
-            </div>
           </div>
         )}
       </div>
