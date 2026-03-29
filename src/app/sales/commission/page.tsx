@@ -9,7 +9,6 @@ import { getUSDtoKRW } from '@/lib/exchange-rate'
 import type { SalesRecord, LandGrade } from '@/types'
 
 const BASE_SALARY_KRW = 2_500_000
-const TEAM_INCENTIVE_RATE = 0.03
 
 export default function CommissionPage() {
   const [records, setRecords] = useState<SalesRecord[]>([])
@@ -90,8 +89,7 @@ export default function CommissionPage() {
     const newTotal = totalSales + simSales
     const newRate = getRate(newTotal)
     const baseCommission = simSales * newRate
-    const teamIncentive = simSales * TEAM_INCENTIVE_RATE
-    const totalComm = baseCommission + teamIncentive
+    const totalComm = baseCommission
     const totalKRW = Math.round(totalComm * exchangeRate)
     const expectedMonthly = BASE_SALARY_KRW + totalKRW
 
@@ -103,7 +101,6 @@ export default function CommissionPage() {
       baseCommission,
       bonusRate: newRate - COMMISSION_RATES.base,
       bonusAmount: simSales * (newRate - COMMISSION_RATES.base),
-      teamIncentive,
       totalComm,
       totalKRW,
       expectedMonthly,
@@ -233,10 +230,6 @@ export default function CommissionPage() {
                 <span className="text-orange-400">{formatUSD(simResult.bonusAmount)}</span>
               </div>
             )}
-            <div className="flex justify-between text-sm">
-              <span className="text-[var(--color-text-muted)]">팀 인센티브 (3%)</span>
-              <span className="text-blue-400">{formatUSD(simResult.teamIncentive)}</span>
-            </div>
             <div className="flex justify-between text-sm font-medium pt-2 border-t border-[var(--color-border)]">
               <span className="text-[var(--color-text-muted)]">총 커미션</span>
               <span className="text-green-400">{formatUSD(simResult.totalComm)}</span>
@@ -256,6 +249,9 @@ export default function CommissionPage() {
                 simResult.newTier === '가속 ★★' ? 'text-orange-400' :
                 'text-[var(--color-text-secondary)]'
               }>{simResult.newTier} ({(simResult.newRate * 100).toFixed(0)}%)</span>
+            </div>
+            <div className="text-xs text-[var(--color-text-muted)] pt-3 border-t border-[var(--color-border)] leading-relaxed">
+              팀 인센티브는 팀 전체 매출의 3%를 팀장 30% / 팀원 70% (매출 비중별)로 월말 정산 후 별도 지급됩니다.
             </div>
           </div>
         )}
