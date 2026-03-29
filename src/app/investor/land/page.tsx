@@ -422,12 +422,26 @@ export default function LandPage() {
             </div>
           )}
 
+          {paymentMethod === 'usdt' && (
+            <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-lg p-4 space-y-2">
+              <p className="text-sm font-medium text-emerald-400">USDT 입금 주소 (ERC-20)</p>
+              <div className="bg-black/30 rounded-lg p-3">
+                <p className="text-xs text-white font-mono break-all select-all">
+                  0x7b591b8ab50282b7a4bc70cb4a1e2f6f4ffa36e4
+                </p>
+              </div>
+              <p className="text-[10px] text-[var(--color-text-muted)] pt-1">
+                위 주소로 USDT를 전송한 후 아래 버튼을 눌러주세요.
+              </p>
+            </div>
+          )}
+
           <button
             onClick={handlePurchase}
             disabled={submitting}
             className="w-full py-3 rounded-lg bg-[var(--color-accent)] hover:bg-[var(--color-accent-hover)] text-white font-medium transition-colors disabled:opacity-50"
           >
-            {submitting ? '신청 중...' : paymentMethod === 'bank' ? '입금 완료' : '구매 신청'}
+            {submitting ? '신청 중...' : paymentMethod === 'bank' ? '입금 완료' : '전송 완료'}
           </button>
         </div>
       )}
