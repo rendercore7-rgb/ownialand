@@ -48,6 +48,7 @@ export default function LandPage() {
   const [paymentMethod, setPaymentMethod] = useState<'usdt' | 'bank'>('bank')
   const [submitting, setSubmitting] = useState(false)
   const [justSubmitted, setJustSubmitted] = useState(false)
+  const [confirmStep, setConfirmStep] = useState(false)
 
   const loadData = useCallback(async () => {
     const supabase = createClient()
@@ -364,7 +365,7 @@ export default function LandPage() {
             <label className="block text-sm text-[var(--color-text-secondary)] mb-3">결제 방법</label>
             <div className="flex gap-3">
               <button
-                onClick={() => setPaymentMethod('bank')}
+                onClick={() => { setPaymentMethod('bank'); setConfirmStep(false) }}
                 className={`flex-1 py-3 rounded-lg text-sm font-medium transition-colors ${
                   paymentMethod === 'bank'
                     ? 'bg-[var(--color-accent)] text-white'
@@ -374,7 +375,7 @@ export default function LandPage() {
                 계좌이체
               </button>
               <button
-                onClick={() => setPaymentMethod('usdt')}
+                onClick={() => { setPaymentMethod('usdt'); setConfirmStep(false) }}
                 className={`flex-1 py-3 rounded-lg text-sm font-medium transition-colors ${
                   paymentMethod === 'usdt'
                     ? 'bg-[var(--color-accent)] text-white'
@@ -423,26 +424,59 @@ export default function LandPage() {
           )}
 
           {paymentMethod === 'usdt' && (
-            <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-lg p-4 space-y-2">
-              <p className="text-sm font-medium text-emerald-400">USDT 입금 주소 (ERC-20)</p>
+            <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-lg p-4 space-y-3">
+              <p className="text-sm font-medium text-emerald-400">USDT 전송 주소 (ERC-20)</p>
               <div className="bg-black/30 rounded-lg p-3">
                 <p className="text-xs text-white font-mono break-all select-all">
                   0x7b591b8ab50282b7a4bc70cb4a1e2f6f4ffa36e4
                 </p>
               </div>
-              <p className="text-[10px] text-[var(--color-text-muted)] pt-1">
-                위 주소로 USDT를 전송한 후 아래 버튼을 눌러주세요.
+              <p className="text-xs text-[var(--color-text-muted)]">
+                전송 금액: <span className="text-white font-medium">{formatUSD(LAND_GRADES[selectedGrade].price * cells)}</span> USDT
               </p>
+
+              {!confirmStep ? (
+                <button
+                  onClick={() => setConfirmStep(true)}
+                  className="w-full py-3 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-medium transition-colors"
+                >
+                  전송하겠습니다
+                </button>
+              ) : (
+                <div className="bg-orange-500/10 border border-orange-500/20 rounded-lg p-4 space-y-3">
+                  <p className="text-sm text-orange-400 font-medium">정말로 전송하셨습니까?</p>
+                  <p className="text-[10px] text-[var(--color-text-muted)]">
+                    위 주소로 USDT를 전송한 후 아래 버튼을 눌러주세요. 전송 확인 후 관리자가 승인 처리합니다.
+                  </p>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={handlePurchase}
+                      disabled={submitting}
+                      className="flex-1 py-2.5 rounded-lg bg-[var(--color-accent)] hover:bg-[var(--color-accent-hover)] text-white text-sm font-medium transition-colors disabled:opacity-50"
+                    >
+                      {submitting ? '신청 중...' : '전송 완료'}
+                    </button>
+                    <button
+                      onClick={() => setConfirmStep(false)}
+                      className="px-4 py-2.5 rounded-lg border border-[var(--color-border)] text-[var(--color-text-secondary)] text-sm hover:text-white transition-colors"
+                    >
+                      취소
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           )}
 
-          <button
-            onClick={handlePurchase}
-            disabled={submitting}
-            className="w-full py-3 rounded-lg bg-[var(--color-accent)] hover:bg-[var(--color-accent-hover)] text-white font-medium transition-colors disabled:opacity-50"
-          >
-            {submitting ? '신청 중...' : paymentMethod === 'bank' ? '입금 완료' : '전송 완료'}
-          </button>
+          {paymentMethod === 'bank' && (
+            <button
+              onClick={handlePurchase}
+              disabled={submitting}
+              className="w-full py-3 rounded-lg bg-[var(--color-accent)] hover:bg-[var(--color-accent-hover)] text-white font-medium transition-colors disabled:opacity-50"
+            >
+              {submitting ? '신청 중...' : '입금 완료'}
+            </button>
+          )}
         </div>
       )}
 
