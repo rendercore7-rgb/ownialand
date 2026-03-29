@@ -1,5 +1,6 @@
 'use client'
 
+import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
@@ -18,6 +19,24 @@ interface SidebarProps {
 
 export function Sidebar({ title, items }: SidebarProps) {
   const pathname = usePathname()
+  const [userName, setUserName] = useState('')
+
+  useEffect(() => {
+    async function loadUser() {
+      const supabase = createClient()
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) return
+
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('full_name')
+        .eq('id', user.id)
+        .single()
+
+      if (profile?.full_name) setUserName(profile.full_name)
+    }
+    loadUser()
+  }, [])
 
   async function handleLogout() {
     const supabase = createClient()
@@ -34,6 +53,14 @@ export function Sidebar({ title, items }: SidebarProps) {
         </h1>
         <p className="text-[10px] text-[var(--color-text-muted)] mt-0.5">{title}</p>
       </div>
+
+      {/* User Info */}
+      {userName && (
+        <div className="px-5 py-3 border-b border-[var(--color-border)]">
+          <p className="text-xs text-[var(--color-text-muted)]">로그인</p>
+          <p className="text-sm text-white font-medium mt-0.5">{userName}</p>
+        </div>
+      )}
 
       {/* Navigation */}
       <nav className="flex-1 p-3 space-y-1 overflow-y-auto">
