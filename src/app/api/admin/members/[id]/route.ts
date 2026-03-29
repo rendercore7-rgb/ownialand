@@ -10,11 +10,11 @@ async function verifyAdmin() {
 
   const { data: profile } = await supabase
     .from('profiles')
-    .select('is_admin')
+    .select('role')
     .eq('id', user.id)
     .single()
 
-  return profile?.is_admin ? user : null
+  return profile?.role === 'admin' ? user : null
 }
 
 export async function PATCH(
@@ -28,11 +28,12 @@ export async function PATCH(
 
   const { id } = await params
   const body = await request.json()
-  const { full_name, phone, role, sales_team } = body as {
+  const { full_name, phone, role, sales_team, is_team_leader } = body as {
     full_name?: string
     phone?: string
     role?: UserRole
     sales_team?: SalesTeam | null
+    is_team_leader?: boolean
   }
 
   const updateData: Record<string, unknown> = {}
@@ -43,6 +44,7 @@ export async function PATCH(
     updateData.is_admin = role === 'admin'
   }
   if (sales_team !== undefined) updateData.sales_team = sales_team || null
+  if (is_team_leader !== undefined) updateData.is_team_leader = is_team_leader
 
   const { data, error } = await supabaseAdmin
     .from('profiles')

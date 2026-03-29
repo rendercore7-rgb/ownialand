@@ -10,11 +10,11 @@ async function verifyAdmin() {
 
   const { data: profile } = await supabase
     .from('profiles')
-    .select('is_admin')
+    .select('role')
     .eq('id', user.id)
     .single()
 
-  return profile?.is_admin ? user : null
+  return profile?.role === 'admin' ? user : null
 }
 
 export async function GET() {
@@ -42,13 +42,14 @@ export async function POST(request: NextRequest) {
   }
 
   const body = await request.json()
-  const { email, password, full_name, phone, role, sales_team } = body as {
+  const { email, password, full_name, phone, role, sales_team, is_team_leader } = body as {
     email: string
     password: string
     full_name: string
     phone?: string
     role: UserRole
     sales_team?: SalesTeam | null
+    is_team_leader?: boolean
   }
 
   if (!email || !password || !full_name || !role) {
@@ -80,6 +81,7 @@ export async function POST(request: NextRequest) {
       role,
       is_admin: role === 'admin',
       sales_team: sales_team ?? null,
+      is_team_leader: is_team_leader ?? false,
     })
     .eq('id', userId)
 

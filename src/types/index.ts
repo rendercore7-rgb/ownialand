@@ -14,6 +14,7 @@ export interface Profile {
   role: UserRole
   is_admin: boolean
   sales_team: SalesTeam | null
+  is_team_leader: boolean
   created_at: string
   updated_at: string
 }

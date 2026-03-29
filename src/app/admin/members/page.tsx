@@ -12,6 +12,7 @@ interface CreateForm {
   phone: string
   role: UserRole
   sales_team: SalesTeam | ''
+  is_team_leader: boolean
 }
 
 const initialCreateForm: CreateForm = {
@@ -21,13 +22,14 @@ const initialCreateForm: CreateForm = {
   phone: '',
   role: 'investor',
   sales_team: '',
+  is_team_leader: false,
 }
 
 export default function AdminMembersPage() {
   const [members, setMembers] = useState<Profile[]>([])
   const [loading, setLoading] = useState(true)
   const [editingId, setEditingId] = useState<string | null>(null)
-  const [editForm, setEditForm] = useState({ full_name: '', phone: '', role: '' as UserRole, sales_team: '' as SalesTeam | '' })
+  const [editForm, setEditForm] = useState({ full_name: '', phone: '', role: '' as UserRole, sales_team: '' as SalesTeam | '', is_team_leader: false })
   const [saving, setSaving] = useState(false)
   const [roleFilter, setRoleFilter] = useState<'all' | UserRole>('all')
   const [showCreate, setShowCreate] = useState(false)
@@ -62,6 +64,7 @@ export default function AdminMembersPage() {
       phone: member.phone,
       role: member.role,
       sales_team: member.sales_team ?? '',
+      is_team_leader: member.is_team_leader ?? false,
     })
   }
 
@@ -78,6 +81,7 @@ export default function AdminMembersPage() {
           phone: editForm.phone,
           role: editForm.role,
           sales_team: editForm.sales_team || null,
+          is_team_leader: editForm.is_team_leader,
         }),
       })
 
@@ -105,6 +109,7 @@ export default function AdminMembersPage() {
         body: JSON.stringify({
           ...createForm,
           sales_team: createForm.sales_team || null,
+          is_team_leader: createForm.is_team_leader,
         }),
       })
 
@@ -226,6 +231,16 @@ export default function AdminMembersPage() {
                 <option value="team2">Team 2</option>
               </select>
             </div>
+            <div className="flex items-center gap-2 sm:pt-5">
+              <input
+                type="checkbox"
+                id="create-team-leader"
+                checked={createForm.is_team_leader}
+                onChange={(e) => setCreateForm({ ...createForm, is_team_leader: e.target.checked })}
+                className="w-4 h-4 rounded accent-[var(--color-accent)]"
+              />
+              <label htmlFor="create-team-leader" className="text-xs text-[var(--color-text-secondary)]">팀장</label>
+            </div>
           </div>
           <button
             onClick={handleCreate}
@@ -303,6 +318,16 @@ export default function AdminMembersPage() {
                           <option value="team2">Team 2</option>
                         </select>
                       </div>
+                      <div className="flex items-center gap-2 pt-5">
+                        <input
+                          type="checkbox"
+                          id={`edit-leader-${m.id}`}
+                          checked={editForm.is_team_leader}
+                          onChange={(e) => setEditForm({ ...editForm, is_team_leader: e.target.checked })}
+                          className="w-4 h-4 rounded accent-[var(--color-accent)]"
+                        />
+                        <label htmlFor={`edit-leader-${m.id}`} className="text-xs text-[var(--color-text-secondary)]">팀장</label>
+                      </div>
                     </div>
                     <div className="flex gap-2">
                       <button
@@ -337,6 +362,11 @@ export default function AdminMembersPage() {
                         {m.sales_team && (
                           <span className="px-2 py-0.5 rounded-full text-[10px] bg-orange-500/20 text-orange-400">
                             {m.sales_team}
+                          </span>
+                        )}
+                        {m.is_team_leader && (
+                          <span className="px-2 py-0.5 rounded-full text-[10px] bg-yellow-500/20 text-yellow-400">
+                            팀장
                           </span>
                         )}
                       </div>
