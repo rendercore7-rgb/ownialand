@@ -1,21 +1,37 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useMemo } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { PageHeader } from '@/components/ui/page-header'
 import { formatUSD } from '@/lib/utils'
+import { COMMISSION_RATES } from '@/lib/constants'
 import type { Profile, SalesRecord } from '@/types'
 
-interface SalesPersonStats {
+type TeamFilter = 'all' | 'team1' | 'team2'
+
+interface PersonStats {
   profile: Profile
-  totalSales: number
-  recordCount: number
+  monthlySales: number
+  closingCount: number
+  commissionRate: number
+  tier: string
+}
+
+function getTier(sales: number): { rate: number; label: string } {
+  if (sales >= COMMISSION_RATES.tier2.threshold) {
+    return { rate: COMMISSION_RATES.base + COMMISSION_RATES.tier2.bonus, label: '슈퍼 ★★★' }
+  }
+  if (sales >= COMMISSION_RATES.tier1.threshold) {
+    return { rate: COMMISSION_RATES.base + COMMISSION_RATES.tier1.bonus, label: '가속 ★★' }
+  }
+  return { rate: COMMISSION_RATES.base, label: '기본' }
 }
 
 export default function LeaderboardPage() {
-  const [team1Stats, setTeam1Stats] = useState<SalesPersonStats[]>([])
-  const [team2Stats, setTeam2Stats] = useState<SalesPersonStats[]>([])
+  const [profiles, setProfiles] = useState<Profile[]>([])
+  const [records, setRecords] = useState<SalesRecord[]>([])
   const [loading, setLoading] = useState(true)
+  const [filter, setFilter] = useState<TeamFilter>('all')
 
   useEffect(() => {
     async function load() {
@@ -26,33 +42,54 @@ export default function LeaderboardPage() {
         supabase.from('sales_records').select('*'),
       ])
 
-      const profiles = profilesRes.data ?? []
-      const records = recordsRes.data as SalesRecord[] ?? []
-
-      const buildStats = (team: 'team1' | 'team2'): SalesPersonStats[] => {
-        return profiles
-          .filter((p) => p.sales_team === team)
-          .map((profile) => {
-            const personRecords = records.filter((r) => r.sales_user_id === profile.id)
-            return {
-              profile,
-              totalSales: personRecords.reduce((sum, r) => sum + r.amount, 0),
-              recordCount: personRecords.length,
-            }
-          })
-          .sort((a, b) => b.totalSales - a.totalSales)
-      }
-
-      setTeam1Stats(buildStats('team1'))
-      setTeam2Stats(buildStats('team2'))
+      if (profilesRes.data) setProfiles(profilesRes.data)
+      if (recordsRes.data) setRecords(recordsRes.data as SalesRecord[])
       setLoading(false)
     }
     load()
   }, [])
 
-  const team1Total = team1Stats.reduce((sum, s) => sum + s.totalSales, 0)
-  const team2Total = team2Stats.reduce((sum, s) => sum + s.totalSales, 0)
-  const maxTotal = Math.max(team1Total, team2Total, 1)
+  const currentMonth = useMemo(() => {
+    const now = new Date()
+    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
+  }, [])
+
+  const stats = useMemo((): PersonStats[] => {
+    const filtered = filter === 'all'
+      ? profiles
+      : profiles.filter((p) => p.sales_team === filter)
+
+    return filtered
+      .map((profile) => {
+        const personRecords = records.filter(
+          (r) => r.sales_user_id === profile.id && r.created_at.startsWith(currentMonth)
+        )
+        const monthlySales = personRecords.reduce((sum, r) => sum + r.amount, 0)
+        const { rate, label } = getTier(monthlySales)
+        return {
+          profile,
+          monthlySales,
+          closingCount: personRecords.length,
+          commissionRate: rate,
+          tier: label,
+        }
+      })
+      .sort((a, b) => b.monthlySales - a.monthlySales)
+  }, [profiles, records, filter, currentMonth])
+
+  const top3 = stats.slice(0, 3)
+  const medals = ['🥇', '🥈', '🥉']
+  const medalColors = [
+    'from-yellow-500/20 to-yellow-600/5 border-yellow-500/30',
+    'from-gray-400/20 to-gray-500/5 border-gray-400/30',
+    'from-orange-500/20 to-orange-600/5 border-orange-500/30',
+  ]
+
+  const filters: { label: string; value: TeamFilter }[] = [
+    { label: '전체', value: 'all' },
+    { label: '1팀', value: 'team1' },
+    { label: '2팀', value: 'team2' },
+  ]
 
   if (loading) {
     return (
@@ -64,87 +101,116 @@ export default function LeaderboardPage() {
 
   return (
     <div className="space-y-6">
-      <PageHeader title="리더보드" description="Team 1 vs Team 2 실적 비교" />
+      <PageHeader title="리더보드" description="이번 달 영업 실적 순위" />
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <div className="bg-[var(--color-bg-card)] rounded-xl border border-[var(--color-border)] p-5 text-center">
-          <p className="text-xs text-[var(--color-text-muted)]">Team 1 총 매출</p>
-          <p className="text-2xl font-bold text-blue-400 mt-1">{formatUSD(team1Total)}</p>
-          <div className="mt-3 h-2 rounded-full bg-[var(--color-bg-hover)] overflow-hidden">
+      {/* 팀 필터 */}
+      <div className="flex gap-2">
+        {filters.map((f) => (
+          <button
+            key={f.value}
+            onClick={() => setFilter(f.value)}
+            className={`px-4 py-2 rounded-lg text-sm transition-colors ${
+              filter === f.value
+                ? 'bg-[var(--color-accent)] text-white'
+                : 'bg-[var(--color-bg-hover)] text-[var(--color-text-secondary)] hover:text-white'
+            }`}
+          >
+            {f.label}
+          </button>
+        ))}
+      </div>
+
+      {/* 탑 3 하이라이트 */}
+      {top3.length > 0 && (
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          {top3.map((entry, idx) => (
             <div
-              className="h-full rounded-full bg-blue-500 transition-all duration-700"
-              style={{ width: `${(team1Total / maxTotal) * 100}%` }}
-            />
-          </div>
-        </div>
-        <div className="bg-[var(--color-bg-card)] rounded-xl border border-[var(--color-border)] p-5 text-center">
-          <p className="text-xs text-[var(--color-text-muted)]">Team 2 총 매출</p>
-          <p className="text-2xl font-bold text-purple-400 mt-1">{formatUSD(team2Total)}</p>
-          <div className="mt-3 h-2 rounded-full bg-[var(--color-bg-hover)] overflow-hidden">
-            <div
-              className="h-full rounded-full bg-purple-500 transition-all duration-700"
-              style={{ width: `${(team2Total / maxTotal) * 100}%` }}
-            />
-          </div>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <TeamBoard title="Team 1" stats={team1Stats} color="blue" />
-        <TeamBoard title="Team 2" stats={team2Stats} color="purple" />
-      </div>
-    </div>
-  )
-}
-
-function TeamBoard({
-  title,
-  stats,
-  color,
-}: {
-  title: string
-  stats: SalesPersonStats[]
-  color: 'blue' | 'purple'
-}) {
-  const maxSales = stats.length > 0 ? Math.max(...stats.map((s) => s.totalSales), 1) : 1
-  const colorMap = {
-    blue: { badge: 'bg-blue-500/20 text-blue-400', bar: 'bg-blue-500' },
-    purple: { badge: 'bg-purple-500/20 text-purple-400', bar: 'bg-purple-500' },
-  }
-  const colors = colorMap[color]
-
-  return (
-    <div className="bg-[var(--color-bg-card)] rounded-xl border border-[var(--color-border)] p-5">
-      <div className="flex items-center gap-2 mb-4">
-        <span className={`px-2 py-0.5 rounded-full text-[10px] font-medium ${colors.badge}`}>{title}</span>
-        <span className="text-xs text-[var(--color-text-muted)]">{stats.length}명</span>
-      </div>
-      {stats.length === 0 ? (
-        <p className="text-sm text-[var(--color-text-muted)]">팀원이 없습니다.</p>
-      ) : (
-        <div className="space-y-3">
-          {stats.map((s, idx) => (
-            <div key={s.profile.id} className="space-y-1">
-              <div className="flex items-center justify-between text-xs">
-                <div className="flex items-center gap-2">
-                  <span className="text-[var(--color-text-muted)] w-5">{idx + 1}</span>
-                  <span className="text-white font-medium">{s.profile.full_name || '(이름 없음)'}</span>
-                </div>
-                <div className="flex items-center gap-3">
-                  <span className="text-[var(--color-text-muted)]">{s.recordCount}건</span>
-                  <span className="text-[var(--color-accent)] font-medium">{formatUSD(s.totalSales)}</span>
-                </div>
-              </div>
-              <div className="h-1.5 rounded-full bg-[var(--color-bg-hover)] overflow-hidden">
-                <div
-                  className={`h-full rounded-full ${colors.bar} transition-all duration-500`}
-                  style={{ width: `${(s.totalSales / maxSales) * 100}%` }}
-                />
-              </div>
+              key={entry.profile.id}
+              className={`bg-gradient-to-b ${medalColors[idx]} rounded-xl border p-5 text-center`}
+            >
+              <div className="text-3xl mb-2">{medals[idx]}</div>
+              <p className="text-sm font-medium text-white">{entry.profile.full_name || '(이름 없음)'}</p>
+              {entry.profile.sales_team && (
+                <p className="text-[10px] text-[var(--color-text-muted)] mt-0.5">
+                  {entry.profile.sales_team === 'team1' ? '1팀' : '2팀'}
+                </p>
+              )}
+              <p className="text-xl font-bold text-[var(--color-accent)] mt-2">{formatUSD(entry.monthlySales)}</p>
+              <p className="text-xs text-[var(--color-text-muted)] mt-1">{entry.closingCount}건 클로징</p>
+              <span className={`inline-block mt-2 px-2 py-0.5 rounded-full text-[10px] font-medium ${
+                entry.tier === '슈퍼 ★★★' ? 'bg-red-500/20 text-red-400' :
+                entry.tier === '가속 ★★' ? 'bg-orange-500/20 text-orange-400' :
+                'bg-gray-500/20 text-gray-400'
+              }`}>
+                {entry.tier}
+              </span>
             </div>
           ))}
         </div>
       )}
+
+      {/* 전체 순위 테이블 */}
+      <div className="bg-[var(--color-bg-card)] rounded-xl border border-[var(--color-border)]">
+        <div className="p-5 border-b border-[var(--color-border)]">
+          <h3 className="text-sm font-medium text-white">전체 순위</h3>
+        </div>
+
+        {/* 테이블 헤더 */}
+        <div className="grid grid-cols-[40px_1fr_60px_100px_80px_100px_80px] gap-2 px-5 py-3 text-[10px] text-[var(--color-text-muted)] uppercase tracking-wider border-b border-[var(--color-border)]">
+          <span>#</span>
+          <span>이름</span>
+          <span>팀</span>
+          <span className="text-right">이번달 매출</span>
+          <span className="text-right">클로징</span>
+          <span className="text-right">커미션</span>
+          <span className="text-right">티어</span>
+        </div>
+
+        {stats.length === 0 ? (
+          <p className="text-sm text-[var(--color-text-muted)] p-5">영업 기록이 없습니다.</p>
+        ) : (
+          <div className="divide-y divide-[var(--color-border)]">
+            {stats.map((entry, idx) => {
+              const commission = entry.monthlySales * entry.commissionRate
+              return (
+                <div
+                  key={entry.profile.id}
+                  className={`grid grid-cols-[40px_1fr_60px_100px_80px_100px_80px] gap-2 px-5 py-3 items-center text-xs ${
+                    idx < 3 ? 'bg-[var(--color-bg-hover)]' : ''
+                  }`}
+                >
+                  <span className={`font-bold ${
+                    idx === 0 ? 'text-yellow-400' :
+                    idx === 1 ? 'text-gray-300' :
+                    idx === 2 ? 'text-orange-400' :
+                    'text-[var(--color-text-muted)]'
+                  }`}>
+                    {idx + 1}
+                  </span>
+                  <span className="text-white font-medium truncate">{entry.profile.full_name || '(이름 없음)'}</span>
+                  <span className={`text-[10px] ${
+                    entry.profile.sales_team === 'team1' ? 'text-blue-400' :
+                    entry.profile.sales_team === 'team2' ? 'text-purple-400' :
+                    'text-[var(--color-text-muted)]'
+                  }`}>
+                    {entry.profile.sales_team === 'team1' ? '1팀' : entry.profile.sales_team === 'team2' ? '2팀' : '—'}
+                  </span>
+                  <span className="text-right text-[var(--color-accent)]">{formatUSD(entry.monthlySales)}</span>
+                  <span className="text-right text-[var(--color-text-secondary)]">{entry.closingCount}건</span>
+                  <span className="text-right text-green-400">{formatUSD(commission)}</span>
+                  <span className={`text-right text-[10px] ${
+                    entry.tier === '슈퍼 ★★★' ? 'text-red-400' :
+                    entry.tier === '가속 ★★' ? 'text-orange-400' :
+                    'text-[var(--color-text-muted)]'
+                  }`}>
+                    {entry.tier}
+                  </span>
+                </div>
+              )
+            })}
+          </div>
+        )}
+      </div>
     </div>
   )
 }
