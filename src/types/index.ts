@@ -81,12 +81,15 @@ export interface LandTransaction {
   profiles?: Profile
 }
 
+export type ConsultationType = 'call' | 'meeting' | 'online' | 'referral' | 'other'
+
 export interface SalesJournal {
   id: string
   user_id: string
   journal_date: string
   content: string
   consultation_count: number
+  consultation_type: ConsultationType | null
   created_at: string
   updated_at: string
 }
