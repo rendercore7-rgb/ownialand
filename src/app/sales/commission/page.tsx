@@ -5,20 +5,25 @@ import { createClient } from '@/lib/supabase/client'
 import { PageHeader } from '@/components/ui/page-header'
 import { formatUSD } from '@/lib/utils'
 import { COMMISSION_RATES, LAND_GRADES } from '@/lib/constants'
+import { getUSDtoKRW } from '@/lib/exchange-rate'
 import type { SalesRecord, LandGrade } from '@/types'
 
 const BASE_SALARY_KRW = 2_500_000
 const TEAM_INCENTIVE_RATE = 0.03
-const USD_TO_KRW = 1350
 
 export default function CommissionPage() {
   const [records, setRecords] = useState<SalesRecord[]>([])
+  const [exchangeRate, setExchangeRate] = useState(1350)
   const [loading, setLoading] = useState(true)
 
   // 시뮬레이터
   const [simGrade, setSimGrade] = useState<LandGrade | ''>('')
   const [simQuantity, setSimQuantity] = useState(1)
   const [simDirect, setSimDirect] = useState('')
+
+  useEffect(() => {
+    getUSDtoKRW().then(setExchangeRate)
+  }, [])
 
   useEffect(() => {
     async function load() {
@@ -87,7 +92,7 @@ export default function CommissionPage() {
     const baseCommission = simSales * newRate
     const teamIncentive = simSales * TEAM_INCENTIVE_RATE
     const totalComm = baseCommission + teamIncentive
-    const totalKRW = Math.round(totalComm * USD_TO_KRW)
+    const totalKRW = Math.round(totalComm * exchangeRate)
     const expectedMonthly = BASE_SALARY_KRW + totalKRW
 
     return {
@@ -237,7 +242,7 @@ export default function CommissionPage() {
               <span className="text-green-400">{formatUSD(simResult.totalComm)}</span>
             </div>
             <div className="flex justify-between text-sm">
-              <span className="text-[var(--color-text-muted)]">원화 환산 (₩{USD_TO_KRW.toLocaleString()}/USD)</span>
+              <span className="text-[var(--color-text-muted)]">원화 환산 (₩{exchangeRate.toLocaleString()}/USD)</span>
               <span className="text-white">₩{simResult.totalKRW.toLocaleString()}</span>
             </div>
             <div className="flex justify-between text-sm font-medium pt-2 border-t border-[var(--color-border)]">
