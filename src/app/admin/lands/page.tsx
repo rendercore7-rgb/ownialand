@@ -38,15 +38,26 @@ export default function AdminLandsPage() {
 
   const loadLands = useCallback(async () => {
     const supabase = createClient()
+    const all: Land[] = []
+    let from = 0
+    const pageSize = 1000
 
-    const { data } = await supabase
-      .from('lands')
-      .select('*, profiles(full_name)')
-      .order('grade', { ascending: true })
-      .order('grid_x', { ascending: true })
-      .order('grid_y', { ascending: true })
+    while (true) {
+      const { data } = await supabase
+        .from('lands')
+        .select('*, profiles(full_name)')
+        .order('grade', { ascending: true })
+        .order('grid_x', { ascending: true })
+        .order('grid_y', { ascending: true })
+        .range(from, from + pageSize - 1)
 
-    if (data) setAllLands(data)
+      if (!data || data.length === 0) break
+      all.push(...data as unknown as Land[])
+      if (data.length < pageSize) break
+      from += pageSize
+    }
+
+    setAllLands(all)
     setLoading(false)
   }, [])
 
@@ -97,14 +108,14 @@ export default function AdminLandsPage() {
 
   return (
     <div className="space-y-6">
-      <PageHeader title="LAND 관리" description="전체 LAND 필지를 조회하고 관리하세요" />
+      <PageHeader title="LAND 관리" description="전체 LAND 셀를 조회하고 관리하세요" />
 
       {/* 요약 통계 */}
       <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
-        <StatCard label="전체 필지수" value={`${stats.totalCount}필지`} />
-        <StatCard label="판매완료" value={`${stats.soldCount}필지`} color="text-green-400" />
-        <StatCard label="예약중" value={`${stats.reservedCount}필지`} color="text-yellow-400" />
-        <StatCard label="판매가능" value={`${stats.availableCount}필지`} />
+        <StatCard label="전체 셀수" value={`${stats.totalCount}셀`} />
+        <StatCard label="판매완료" value={`${stats.soldCount}셀`} color="text-green-400" />
+        <StatCard label="예약중" value={`${stats.reservedCount}셀`} color="text-yellow-400" />
+        <StatCard label="판매가능" value={`${stats.availableCount}셀`} />
         <StatCard label="총 판매 매출" value={formatUSD(stats.totalSalesUSD)} accent />
       </div>
 
@@ -151,7 +162,7 @@ export default function AdminLandsPage() {
       {/* 결과 카운트 + 페이지 정보 */}
       <div className="flex items-center justify-between">
         <p className="text-xs text-[var(--color-text-muted)]">
-          검색 결과: {filtered.length}필지
+          검색 결과: {filtered.length}셀
         </p>
         <p className="text-xs text-[var(--color-text-muted)]">
           {page} / {totalPages} 페이지
