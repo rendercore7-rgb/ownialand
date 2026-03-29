@@ -162,7 +162,9 @@ export default function LandPage() {
       status: 'pending',
     })
 
-    if (!error) {
+    if (error) {
+      alert(`구매 신청 실패: ${error.message}`)
+    } else {
       setShowPurchase(false)
       setJustSubmitted(true)
       setCells(1)
