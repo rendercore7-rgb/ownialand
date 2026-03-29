@@ -6,7 +6,7 @@ import { PageHeader } from '@/components/ui/page-header'
 import { StatusBadge } from '@/components/ui/status-badge'
 import { formatUSD, formatDate } from '@/lib/utils'
 import { LAND_GRADES } from '@/lib/constants'
-import type { Land, LandGrade, LandStatus } from '@/types'
+import type { Land, LandTransaction, LandGrade, LandStatus } from '@/types'
 
 type FilterGrade = 'all' | LandGrade
 type FilterStatus = 'all' | LandStatus
@@ -31,10 +31,12 @@ const STATUS_FILTERS: { label: string; value: FilterStatus }[] = [
 
 export default function AdminLandsPage() {
   const [allLands, setAllLands] = useState<Land[]>([])
+  const [transactions, setTransactions] = useState<LandTransaction[]>([])
   const [loading, setLoading] = useState(true)
   const [gradeFilter, setGradeFilter] = useState<FilterGrade>('all')
   const [statusFilter, setStatusFilter] = useState<FilterStatus>('all')
   const [page, setPage] = useState(1)
+  const [processing, setProcessing] = useState<string | null>(null)
 
   const loadLands = useCallback(async () => {
     const supabase = createClient()
@@ -58,12 +60,46 @@ export default function AdminLandsPage() {
     }
 
     setAllLands(all)
+
+    const { data: txData } = await supabase
+      .from('land_transactions')
+      .select('*, profiles(full_name)')
+      .order('created_at', { ascending: false })
+
+    if (txData) setTransactions(txData as unknown as LandTransaction[])
     setLoading(false)
   }, [])
 
   useEffect(() => {
     loadLands()
   }, [loadLands])
+
+  async function handleApproveTx(txId: string) {
+    setProcessing(txId)
+    const supabase = createClient()
+    const { error } = await supabase
+      .from('land_transactions')
+      .update({ status: 'approved' })
+      .eq('id', txId)
+    if (!error) await loadLands()
+    setProcessing(null)
+  }
+
+  async function handleRejectTx(txId: string) {
+    setProcessing(txId)
+    const supabase = createClient()
+    const { error } = await supabase
+      .from('land_transactions')
+      .update({ status: 'rejected' })
+      .eq('id', txId)
+    if (!error) await loadLands()
+    setProcessing(null)
+  }
+
+  const pendingTxs = useMemo(
+    () => transactions.filter((tx) => tx.status === 'pending'),
+    [transactions]
+  )
 
   const filtered = useMemo(() => {
     let result = allLands
@@ -118,6 +154,47 @@ export default function AdminLandsPage() {
         <StatCard label="판매가능" value={`${stats.availableCount}셀`} />
         <StatCard label="총 판매 매출" value={formatUSD(stats.totalSalesUSD)} accent />
       </div>
+
+      {/* 입금 확인 대기 */}
+      {pendingTxs.length > 0 && (
+        <div className="bg-[var(--color-bg-card)] rounded-xl border border-yellow-500/20 p-5 space-y-3">
+          <h3 className="text-sm font-medium text-yellow-400">입금 확인 대기 ({pendingTxs.length}건)</h3>
+          <div className="divide-y divide-[var(--color-border)]">
+            {pendingTxs.map((tx) => {
+              const profile = (tx as unknown as { profiles?: { full_name: string } }).profiles
+              return (
+                <div key={tx.id} className="flex items-center justify-between py-3">
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <p className="text-sm text-white">{profile?.full_name ?? '—'}</p>
+                      <span className="px-2 py-0.5 rounded-full text-[10px] bg-yellow-500/20 text-yellow-400">대기</span>
+                    </div>
+                    <p className="text-xs text-[var(--color-text-muted)] mt-0.5">
+                      {LAND_GRADES[tx.grade]?.label} · {formatUSD(tx.price)} · {tx.payment_method === 'usdt' ? 'USDT' : '계좌이체'} · {formatDate(tx.created_at)}
+                    </p>
+                  </div>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => handleApproveTx(tx.id)}
+                      disabled={processing === tx.id}
+                      className="px-3 py-1.5 rounded-lg bg-green-600 hover:bg-green-700 text-white text-xs font-medium transition-colors disabled:opacity-50"
+                    >
+                      {processing === tx.id ? '처리중...' : '승인'}
+                    </button>
+                    <button
+                      onClick={() => handleRejectTx(tx.id)}
+                      disabled={processing === tx.id}
+                      className="px-3 py-1.5 rounded-lg border border-red-500/30 text-red-400 text-xs hover:bg-red-500/10 transition-colors disabled:opacity-50"
+                    >
+                      거절
+                    </button>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      )}
 
       {/* 등급 필터 */}
       <div className="space-y-3">

@@ -47,6 +47,7 @@ export default function LandPage() {
   const [cells, setCells] = useState(1)
   const [paymentMethod, setPaymentMethod] = useState<'usdt' | 'bank'>('bank')
   const [submitting, setSubmitting] = useState(false)
+  const [justSubmitted, setJustSubmitted] = useState(false)
 
   const loadData = useCallback(async () => {
     const supabase = createClient()
@@ -163,6 +164,7 @@ export default function LandPage() {
 
     if (!error) {
       setShowPurchase(false)
+      setJustSubmitted(true)
       setCells(1)
       await loadData()
     }
@@ -425,6 +427,16 @@ export default function LandPage() {
           >
             {submitting ? '신청 중...' : paymentMethod === 'bank' ? '입금 완료' : '구매 신청'}
           </button>
+        </div>
+      )}
+
+      {/* 입금 확인 대기 안내 */}
+      {justSubmitted && (
+        <div className="bg-yellow-500/10 border border-yellow-500/20 rounded-xl p-5 text-center space-y-2">
+          <p className="text-sm font-medium text-yellow-400">입금 확인 대기중</p>
+          <p className="text-xs text-[var(--color-text-muted)]">
+            관리자가 입금을 확인한 후 승인 처리됩니다. 잠시만 기다려주세요.
+          </p>
         </div>
       )}
 
