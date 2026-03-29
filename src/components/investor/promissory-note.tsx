@@ -16,6 +16,7 @@ export function PromissoryNote({ investment, onSigned }: PromissoryNoteProps) {
   const [isDrawing, setIsDrawing] = useState(false)
   const [hasSignature, setHasSignature] = useState(false)
   const [saving, setSaving] = useState(false)
+  const [signed, setSigned] = useState(!!investment.signed_at)
 
   useEffect(() => {
     const canvas = canvasRef.current
@@ -90,7 +91,10 @@ export function PromissoryNote({ investment, onSigned }: PromissoryNoteProps) {
       })
       .eq('id', investment.id)
 
-    if (!error) {
+    if (error) {
+      alert(`서명 저장 실패: ${error.message}`)
+    } else {
+      setSigned(true)
       onSigned()
     }
     setSaving(false)
@@ -167,9 +171,9 @@ export function PromissoryNote({ investment, onSigned }: PromissoryNoteProps) {
           상기 내용을 확인하였으며, 본 차용증에 서명함으로써 투자 계약에 동의합니다.
         </p>
 
-        {investment.signed_at ? (
+        {signed ? (
           <div className="text-center py-4">
-            <p className="text-sm text-green-400">서명 완료: {formatDate(investment.signed_at)}</p>
+            <p className="text-sm text-green-400">서명 완료</p>
             {investment.signature_data && (
               <img
                 src={investment.signature_data}
@@ -178,6 +182,12 @@ export function PromissoryNote({ investment, onSigned }: PromissoryNoteProps) {
                 style={{ width: 280, height: 120 }}
               />
             )}
+            <button
+              onClick={onSigned}
+              className="mt-4 px-6 py-2.5 rounded-lg bg-green-600 hover:bg-green-700 text-white text-sm font-medium transition-colors"
+            >
+              완료
+            </button>
           </div>
         ) : (
           <>
