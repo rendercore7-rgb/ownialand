@@ -7,6 +7,7 @@ import { PageHeader } from '@/components/ui/page-header'
 import { StatCard } from '@/components/ui/stat-card'
 import { formatUSD } from '@/lib/utils'
 import { LAND_GRADES } from '@/lib/constants'
+import { getUSDtoKRW } from '@/lib/exchange-rate'
 import type { LandTransaction, SalesJournal, SalesRecord, LandGrade, Profile } from '@/types'
 import {
   AreaChart,
@@ -24,13 +25,21 @@ interface MonthlyData {
   team2: number
 }
 
+const TEAM_LEADER_RATE = 0.03
+
 export default function SalesDashboard() {
   const [records, setRecords] = useState<SalesRecord[]>([])
   const [journals, setJournals] = useState<SalesJournal[]>([])
   const [landTxs, setLandTxs] = useState<LandTransaction[]>([])
   const [allRecords, setAllRecords] = useState<SalesRecord[]>([])
   const [salesProfiles, setSalesProfiles] = useState<Profile[]>([])
+  const [myProfile, setMyProfile] = useState<Profile | null>(null)
+  const [exchangeRate, setExchangeRate] = useState(1350)
   const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    getUSDtoKRW().then(setExchangeRate)
+  }, [])
 
   useEffect(() => {
     async function load() {
@@ -38,7 +47,7 @@ export default function SalesDashboard() {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) return
 
-      const [recRes, jrnRes, landRes, allRecRes, profileRes] = await Promise.all([
+      const [recRes, jrnRes, landRes, allRecRes, profileRes, myRes] = await Promise.all([
         supabase
           .from('sales_records')
           .select('*')
@@ -62,6 +71,11 @@ export default function SalesDashboard() {
           .from('profiles')
           .select('*')
           .eq('role', 'sales'),
+        supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', user.id)
+          .single(),
       ])
 
       if (recRes.data) setRecords(recRes.data)
@@ -69,6 +83,7 @@ export default function SalesDashboard() {
       if (landRes.data) setLandTxs(landRes.data)
       if (allRecRes.data) setAllRecords(allRecRes.data as SalesRecord[])
       if (profileRes.data) setSalesProfiles(profileRes.data)
+      if (myRes.data) setMyProfile(myRes.data)
       setLoading(false)
     }
     load()
@@ -138,6 +153,42 @@ export default function SalesDashboard() {
       .slice(0, 5)
   }, [allRecords, salesProfiles, currentMonth])
 
+  // 팀장 커미션 데이터
+  const teamLeaderData = useMemo(() => {
+    if (!myProfile?.is_team_leader || !myProfile.sales_team) return null
+
+    const teamMembers = salesProfiles.filter((p) => p.sales_team === myProfile.sales_team)
+    const teamMemberIds = new Set(teamMembers.map((m) => m.id))
+
+    const teamMonthlyRecords = allRecords.filter(
+      (r) => teamMemberIds.has(r.sales_user_id) && r.created_at.startsWith(currentMonth)
+    )
+
+    const teamTotalSales = teamMonthlyRecords.reduce((sum, r) => sum + r.amount, 0)
+    const leaderCommission = teamTotalSales * TEAM_LEADER_RATE
+    const leaderCommissionKRW = Math.round(leaderCommission * exchangeRate)
+
+    const memberStats = teamMembers
+      .map((m) => {
+        const memberRecords = teamMonthlyRecords.filter((r) => r.sales_user_id === m.id)
+        return {
+          name: m.full_name,
+          sales: memberRecords.reduce((sum, r) => sum + r.amount, 0),
+          count: memberRecords.length,
+        }
+      })
+      .sort((a, b) => b.sales - a.sales)
+
+    return {
+      teamLabel: myProfile.sales_team === 'team1' ? '1팀' : '2팀',
+      memberCount: teamMembers.length,
+      teamTotalSales,
+      leaderCommission,
+      leaderCommissionKRW,
+      memberStats,
+    }
+  }, [myProfile, salesProfiles, allRecords, currentMonth, exchangeRate])
+
   // LAND 구역별 판매
   const landSalesByGrade = useMemo(
     () =>
@@ -160,6 +211,50 @@ export default function SalesDashboard() {
   return (
     <div className="space-y-6">
       <PageHeader title="영업 대시보드" description="이번 달 영업 현황을 한눈에 확인하세요" />
+
+      {/* 팀장 전용 섹션 */}
+      {teamLeaderData && (
+        <div className="bg-gradient-to-r from-yellow-500/10 to-orange-500/5 rounded-xl border border-yellow-500/20 p-5 space-y-4">
+          <div className="flex items-center gap-2">
+            <span className="px-2 py-0.5 rounded-full text-[10px] font-medium bg-yellow-500/20 text-yellow-400">팀장</span>
+            <h3 className="text-sm font-medium text-white">{teamLeaderData.teamLabel} 팀 커미션</h3>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
+            <div className="bg-black/20 rounded-lg p-3">
+              <p className="text-[10px] text-[var(--color-text-muted)]">팀 이번 달 매출</p>
+              <p className="text-lg font-semibold text-white mt-0.5">{formatUSD(teamLeaderData.teamTotalSales)}</p>
+            </div>
+            <div className="bg-black/20 rounded-lg p-3">
+              <p className="text-[10px] text-[var(--color-text-muted)]">팀장 커미션 (3%)</p>
+              <p className="text-lg font-semibold text-yellow-400 mt-0.5">{formatUSD(teamLeaderData.leaderCommission)}</p>
+            </div>
+            <div className="bg-black/20 rounded-lg p-3">
+              <p className="text-[10px] text-[var(--color-text-muted)]">원화 환산</p>
+              <p className="text-lg font-semibold text-white mt-0.5">{'\u20A9'}{teamLeaderData.leaderCommissionKRW.toLocaleString()}</p>
+            </div>
+            <div className="bg-black/20 rounded-lg p-3">
+              <p className="text-[10px] text-[var(--color-text-muted)]">팀원 수</p>
+              <p className="text-lg font-semibold text-white mt-0.5">{teamLeaderData.memberCount}명</p>
+            </div>
+          </div>
+
+          {teamLeaderData.memberStats.length > 0 && (
+            <div className="space-y-1.5">
+              <p className="text-xs text-[var(--color-text-muted)]">팀원별 이번 달 매출</p>
+              {teamLeaderData.memberStats.map((m) => (
+                <div key={m.name} className="flex items-center justify-between py-2 px-3 rounded-lg bg-black/20 text-xs">
+                  <span className="text-white">{m.name || '(이름 없음)'}</span>
+                  <div className="flex items-center gap-3">
+                    <span className="text-[var(--color-text-muted)]">{m.count}건</span>
+                    <span className="text-yellow-400">{formatUSD(m.sales)}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* KPI 카드 4개 */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
