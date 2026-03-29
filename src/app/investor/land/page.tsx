@@ -401,12 +401,29 @@ export default function LandPage() {
             </div>
           </div>
 
+          {paymentMethod === 'bank' && (
+            <div className="bg-blue-500/10 border border-blue-500/20 rounded-lg p-4 space-y-2">
+              <p className="text-sm font-medium text-blue-400">입금 계좌 정보</p>
+              <div className="grid grid-cols-[60px_1fr] gap-1.5 text-sm">
+                <span className="text-[var(--color-text-muted)]">은행</span>
+                <span className="text-white">농협</span>
+                <span className="text-[var(--color-text-muted)]">계좌</span>
+                <span className="text-white font-mono">355-0095-7077-13</span>
+                <span className="text-[var(--color-text-muted)]">예금주</span>
+                <span className="text-white">(주)렌더코어에이아이</span>
+              </div>
+              <p className="text-[10px] text-[var(--color-text-muted)] pt-1">
+                위 계좌로 입금 후 아래 버튼을 눌러주세요.
+              </p>
+            </div>
+          )}
+
           <button
             onClick={handlePurchase}
             disabled={submitting}
             className="w-full py-3 rounded-lg bg-[var(--color-accent)] hover:bg-[var(--color-accent-hover)] text-white font-medium transition-colors disabled:opacity-50"
           >
-            {submitting ? '신청 중...' : '구매 신청'}
+            {submitting ? '신청 중...' : paymentMethod === 'bank' ? '입금 완료' : '구매 신청'}
           </button>
         </div>
       )}
