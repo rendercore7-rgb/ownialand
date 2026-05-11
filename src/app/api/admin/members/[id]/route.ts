@@ -28,12 +28,15 @@ export async function PATCH(
 
   const { id } = await params
   const body = await request.json()
-  const { full_name, phone, role, sales_team, is_team_leader } = body as {
+  const { full_name, phone, role, sales_team, is_team_leader, bank_name, account_number, account_holder } = body as {
     full_name?: string
     phone?: string
     role?: UserRole
     sales_team?: SalesTeam | null
     is_team_leader?: boolean
+    bank_name?: string
+    account_number?: string
+    account_holder?: string
   }
 
   const updateData: Record<string, unknown> = {}
@@ -45,6 +48,9 @@ export async function PATCH(
   }
   if (sales_team !== undefined) updateData.sales_team = sales_team || null
   if (is_team_leader !== undefined) updateData.is_team_leader = is_team_leader
+  if (bank_name !== undefined) updateData.bank_name = bank_name
+  if (account_number !== undefined) updateData.account_number = account_number
+  if (account_holder !== undefined) updateData.account_holder = account_holder
 
   const { data, error } = await supabaseAdmin
     .from('profiles')
@@ -58,4 +64,32 @@ export async function PATCH(
   }
 
   return NextResponse.json({ success: true, data })
+}
+
+export async function DELETE(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const admin = await verifyAdmin()
+  if (!admin) {
+    return NextResponse.json({ success: false, error: '권한이 없습니다.' }, { status: 403 })
+  }
+
+  const { id } = await params
+
+  const { error: deleteAuthError } = await supabaseAdmin.auth.admin.deleteUser(id)
+  if (deleteAuthError) {
+    return NextResponse.json({ success: false, error: deleteAuthError.message }, { status: 500 })
+  }
+
+  const { error: deleteProfileError } = await supabaseAdmin
+    .from('profiles')
+    .delete()
+    .eq('id', id)
+
+  if (deleteProfileError) {
+    return NextResponse.json({ success: false, error: deleteProfileError.message }, { status: 500 })
+  }
+
+  return NextResponse.json({ success: true })
 }

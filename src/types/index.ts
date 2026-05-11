@@ -1,8 +1,11 @@
 export type LandGrade = 'central_crystal' | 'skyline' | 'neon' | 'riverside' | 'startup'
+
+// AI City types
+export * from './city'
 export type LandStatus = 'available' | 'reserved' | 'sold'
 export type InvestmentStatus = 'pending' | 'confirmed' | 'active' | 'completed' | 'cancelled'
 export type PaymentRequestStatus = 'requested' | 'confirmed' | 'transferred'
-export type InvestmentOption = 'option1' | 'option2'
+export type InvestmentOption = 'option1' | 'option2' | 'option3'
 export type UserRole = 'investor' | 'admin' | 'sales'
 export type SalesTeam = 'team1' | 'team2'
 
@@ -15,6 +18,9 @@ export interface Profile {
   is_admin: boolean
   sales_team: SalesTeam | null
   is_team_leader: boolean
+  bank_name: string
+  account_number: string
+  account_holder: string
   created_at: string
   updated_at: string
 }

@@ -29,8 +29,9 @@ export default function AdminMembersPage() {
   const [members, setMembers] = useState<Profile[]>([])
   const [loading, setLoading] = useState(true)
   const [editingId, setEditingId] = useState<string | null>(null)
-  const [editForm, setEditForm] = useState({ full_name: '', phone: '', role: '' as UserRole, sales_team: '' as SalesTeam | '', is_team_leader: false })
+  const [editForm, setEditForm] = useState({ full_name: '', phone: '', role: '' as UserRole, sales_team: '' as SalesTeam | '', is_team_leader: false, bank_name: '', account_number: '', account_holder: '' })
   const [saving, setSaving] = useState(false)
+  const [deletingId, setDeletingId] = useState<string | null>(null)
   const [roleFilter, setRoleFilter] = useState<'all' | UserRole>('all')
   const [showCreate, setShowCreate] = useState(false)
   const [createForm, setCreateForm] = useState<CreateForm>(initialCreateForm)
@@ -65,6 +66,9 @@ export default function AdminMembersPage() {
       role: member.role,
       sales_team: member.sales_team ?? '',
       is_team_leader: member.is_team_leader ?? false,
+      bank_name: member.bank_name ?? '',
+      account_number: member.account_number ?? '',
+      account_holder: member.account_holder ?? '',
     })
   }
 
@@ -82,6 +86,9 @@ export default function AdminMembersPage() {
           role: editForm.role,
           sales_team: editForm.sales_team || null,
           is_team_leader: editForm.is_team_leader,
+          bank_name: editForm.bank_name,
+          account_number: editForm.account_number,
+          account_holder: editForm.account_holder,
         }),
       })
 
@@ -125,6 +132,30 @@ export default function AdminMembersPage() {
       setError('회원 생성 요청에 실패했습니다.')
     }
     setCreating(false)
+  }
+
+  async function handleDelete(memberId: string) {
+    const confirmed = window.confirm('회원을 삭제하면 복구할 수 없습니다. 삭제하시겠습니까?')
+    if (!confirmed) return
+
+    setDeletingId(memberId)
+    setError('')
+
+    try {
+      const res = await fetch(`/api/admin/members/${memberId}`, {
+        method: 'DELETE',
+      })
+      const json = await res.json()
+      if (json.success) {
+        await loadMembers()
+      } else {
+        setError(json.error ?? '삭제에 실패했습니다.')
+      }
+    } catch {
+      setError('삭제 요청에 실패했습니다.')
+    }
+
+    setDeletingId(null)
   }
 
   const roleFilters: { label: string; value: 'all' | UserRole }[] = [
@@ -329,6 +360,59 @@ export default function AdminMembersPage() {
                         <label htmlFor={`edit-leader-${m.id}`} className="text-xs text-[var(--color-text-secondary)]">팀장</label>
                       </div>
                     </div>
+                    <div className="pt-2 border-t border-[var(--color-border)]">
+                      <p className="text-xs text-[var(--color-text-muted)] mb-3">은행 계좌 정보</p>
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                        <div>
+                          <label className="block text-xs text-[var(--color-text-muted)] mb-1">은행명</label>
+                          <select
+                            value={editForm.bank_name}
+                            onChange={(e) => setEditForm({ ...editForm, bank_name: e.target.value })}
+                            className="w-full px-3 py-2 rounded-lg bg-[var(--color-bg-hover)] border border-[var(--color-border)] text-white text-sm"
+                          >
+                            <option value="">선택</option>
+                            <option value="국민은행">국민은행</option>
+                            <option value="신한은행">신한은행</option>
+                            <option value="우리은행">우리은행</option>
+                            <option value="하나은행">하나은행</option>
+                            <option value="농협은행">농협은행</option>
+                            <option value="IBK기업은행">IBK기업은행</option>
+                            <option value="카카오뱅크">카카오뱅크</option>
+                            <option value="토스뱅크">토스뱅크</option>
+                            <option value="케이뱅크">케이뱅크</option>
+                            <option value="SC제일은행">SC제일은행</option>
+                            <option value="씨티은행">씨티은행</option>
+                            <option value="부산은행">부산은행</option>
+                            <option value="대구은행">대구은행</option>
+                            <option value="경남은행">경남은행</option>
+                            <option value="광주은행">광주은행</option>
+                            <option value="전북은행">전북은행</option>
+                            <option value="수협은행">수협은행</option>
+                            <option value="새마을금고">새마을금고</option>
+                            <option value="신협">신협</option>
+                            <option value="우체국">우체국</option>
+                          </select>
+                        </div>
+                        <div>
+                          <label className="block text-xs text-[var(--color-text-muted)] mb-1">계좌번호</label>
+                          <input
+                            value={editForm.account_number}
+                            onChange={(e) => setEditForm({ ...editForm, account_number: e.target.value })}
+                            placeholder="- 없이 입력"
+                            className="w-full px-3 py-2 rounded-lg bg-[var(--color-bg-hover)] border border-[var(--color-border)] text-white text-sm focus:outline-none focus:border-[var(--color-accent)]"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs text-[var(--color-text-muted)] mb-1">예금주</label>
+                          <input
+                            value={editForm.account_holder}
+                            onChange={(e) => setEditForm({ ...editForm, account_holder: e.target.value })}
+                            placeholder="예금주명"
+                            className="w-full px-3 py-2 rounded-lg bg-[var(--color-bg-hover)] border border-[var(--color-border)] text-white text-sm focus:outline-none focus:border-[var(--color-accent)]"
+                          />
+                        </div>
+                      </div>
+                    </div>
                     <div className="flex gap-2">
                       <button
                         onClick={() => handleSave(m.id)}
@@ -373,13 +457,27 @@ export default function AdminMembersPage() {
                       <p className="text-xs text-[var(--color-text-muted)]">
                         {m.email} · {m.phone || '—'} · 가입: {formatDate(m.created_at)}
                       </p>
+                      {m.bank_name && (
+                        <p className="text-xs text-[var(--color-text-muted)] mt-0.5">
+                          {m.bank_name} · {m.account_number || '—'} · {m.account_holder || '—'}
+                        </p>
+                      )}
                     </div>
-                    <button
-                      onClick={() => startEdit(m)}
-                      className="px-3 py-1.5 rounded-lg border border-[var(--color-border)] text-[var(--color-text-secondary)] text-xs hover:text-white transition-colors"
-                    >
-                      수정
-                    </button>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => startEdit(m)}
+                        className="px-3 py-1.5 rounded-lg border border-[var(--color-border)] text-[var(--color-text-secondary)] text-xs hover:text-white transition-colors"
+                      >
+                        수정
+                      </button>
+                      <button
+                        onClick={() => handleDelete(m.id)}
+                        disabled={deletingId === m.id}
+                        className="px-3 py-1.5 rounded-lg border border-red-500/30 text-red-300 text-xs hover:bg-red-500/10 transition-colors disabled:opacity-50"
+                      >
+                        {deletingId === m.id ? '삭제 중...' : '삭제'}
+                      </button>
+                    </div>
                   </div>
                 )}
               </div>

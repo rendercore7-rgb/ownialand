@@ -55,7 +55,7 @@ create type land_grade as enum ('central_crystal', 'skyline', 'neon', 'riverside
 create type land_status as enum ('available', 'reserved', 'sold');
 create type investment_status as enum ('pending', 'confirmed', 'active', 'completed', 'cancelled');
 create type payment_request_status as enum ('requested', 'confirmed', 'transferred');
-create type investment_option as enum ('option1', 'option2');
+create type investment_option as enum ('option1', 'option2', 'option3');
 create type user_role as enum ('investor', 'admin', 'sales');
 create type sales_team as enum ('team1', 'team2');
 
@@ -70,6 +70,9 @@ create table profiles (
   role user_role not null default 'investor',
   is_admin boolean not null default false,
   sales_team sales_team,
+  bank_name text default '',
+  account_number text default '',
+  account_holder text default '',
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
